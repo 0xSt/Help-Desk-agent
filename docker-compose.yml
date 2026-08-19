@@ -1,0 +1,147 @@
+# Deploy locale dell'intero sistema: quattro servizi più un job di ingestion.
+#
+#   frontend  (nginx)   :8080  -> serve le due UI, inoltra /api al backend
+#   backend   (FastAPI) :8000  -> grafo LangGraph, API, tracing su MLflow
+#   qdrant              :6333  -> database vettoriale, due collection
+#   mlflow              :5000  -> tracking server (tracing ed evaluation)
+#
+#   ingestion (one-shot)       -> popola Qdrant e termina; il backend parte
+#                                 solo dopo che è uscito con successo
+#
+# Avvio:
+#   cp .env.example .env      # e valorizza GEMINI_API_KEY
+#   docker compose up --build
+#
+# Poi: interfaccia utente su http://localhost:8080/, console operatore su
+# http://localhost:8080/agent, MLflow su http://localhost:5000.
+
+name: helpdesk-hitl
+
+services:
+
+  # ------------------------------------------------------------------ Qdrant
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    restart: unless-stopped
+    ports:
+      # Esposto sull'host solo per ispezione manuale (dashboard su /dashboard).
+      # I servizi interni lo raggiungono comunque via rete del compose.
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      # L'immagine di Qdrant non include curl né wget: usiamo il redirect di
+      # bash su /dev/tcp, che non richiede binari aggiuntivi, per verificare
+      # che la porta accetti connessioni.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/6333' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # ------------------------------------------------------------------ MLflow
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/mlflow.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_db:/mlflow/db
+      - mlflow_artifacts:/mlflow/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # --------------------------------------------------------------- Ingestion
+  # Job one-shot: crea le collection se assenti, altrimenti le aggiorna in
+  # modo incrementale (vedi app/ingest.py e sync_collection in retrieval.py).
+  # Gira ad ogni `docker compose up`, ma senza modifiche alla knowledge base
+  # non produce nessuna chiamata all'API di embedding.
+  ingestion:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    command: ["python", "-m", "app.ingest"]
+    restart: "no"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
+      # Il job indicizza esplicitamente: l'auto-indicizzazione all'import
+      # sarebbe lavoro duplicato.
+      AUTO_INDEX: "false"
+      # L'ingestion non traccia: non è una richiesta utente.
+      MLFLOW_ENABLED: "false"
+
+  # ----------------------------------------------------------------- Backend
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    ports:
+      # Esposto sull'host per poter interrogare l'API direttamente (curl,
+      # /docs di FastAPI). Il frontend lo raggiunge via rete interna.
+      - "8000:8000"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      ingestion:
+        # Il backend non parte finché l'indice non è pronto: senza questo
+        # vincolo le prime richieste troverebbero collection vuote e ogni
+        # ticket verrebbe escalato per "retrieval senza appigli".
+        condition: service_completed_successfully
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT: ${MLFLOW_EXPERIMENT:-helpdesk-agent}
+      MLFLOW_ENABLED: "true"
+      # L'indicizzazione è compito del job di ingestion.
+      AUTO_INDEX: "false"
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.7-flash}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+      RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-3}
+      ESCALATION_CONFIDENCE_THRESHOLD: ${ESCALATION_CONFIDENCE_THRESHOLD:-0.65}
+      ESCALATION_MIN_RETRIEVAL_SCORE: ${ESCALATION_MIN_RETRIEVAL_SCORE:-0.45}
+      ESCALATION_PRECEDENT_SCORE_FLOOR: ${ESCALATION_PRECEDENT_SCORE_FLOOR:-0.55}
+      ESCALATION_PRECEDENT_RATIO: ${ESCALATION_PRECEDENT_RATIO:-0.5}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/tickets')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ---------------------------------------------------------------- Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  # Named volume invece di bind mount: l'indice è un artefatto ricostruibile
+  # dai file della knowledge base, non qualcosa da versionare o modificare a
+  # mano dall'host.
+  qdrant_storage:
+  mlflow_db:
+  mlflow_artifacts:

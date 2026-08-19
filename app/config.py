@@ -61,6 +61,17 @@ FALLBACK_EMBEDDING_DIM = 256
 
 
 # --------------------------------------------------------------------------
+# Qdrant
+# --------------------------------------------------------------------------
+
+# In sviluppo locale l'indice sta su disco (nessun server esterno). In Docker
+# Compose si valorizza QDRANT_URL e lo stesso client punta al servizio
+# containerizzato: cambia solo l'argomento del costruttore.
+QDRANT_URL = os.environ.get("QDRANT_URL")
+QDRANT_PATH = _env_str("QDRANT_PATH", "qdrant_data")
+
+
+# --------------------------------------------------------------------------
 # Soglie della logica di escalation
 # --------------------------------------------------------------------------
 
@@ -83,6 +94,13 @@ PRECEDENT_ESCALATION_RATIO = _env_float("ESCALATION_PRECEDENT_RATIO", 0.5)
 
 # Quanti risultati recuperare da ciascuna delle due knowledge base.
 RETRIEVAL_TOP_K = _env_int("RETRIEVAL_TOP_K", 3)
+
+# Indicizzare automaticamente all'import di app/retrieval.py.
+# True in sviluppo locale (basta avviare uvicorn), False in Docker Compose:
+# lì è un servizio di ingestion dedicato a popolare Qdrant prima che il
+# backend accetti richieste, e due processi che indicizzano in parallelo
+# sarebbero solo lavoro duplicato.
+AUTO_INDEX = os.environ.get("AUTO_INDEX", "true").lower() not in ("0", "false", "no")
 
 
 def active_embedding_dim() -> int:

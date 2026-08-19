@@ -23,25 +23,90 @@ nessun framework/build step).
 > ancora quella "semplice" del prototipo iniziale — vedi la sezione
 > "Roadmap" in fondo.
 
-## Avvio rapido
+## Avvio con Docker Compose (modalità consigliata)
 
 ```bash
-pip install -r requirements.txt
-cd hitl-langgraph-app
-uvicorn app.main:app --reload
+cp .env.example .env        # e valorizza GEMINI_API_KEY
+docker compose up --build
 ```
 
-- `http://localhost:8000/` — interfaccia **utente**: apre un ticket.
-- `http://localhost:8000/agent` — interfaccia **operatore**: coda ticket in escalation.
+| Servizio | URL | Ruolo |
+|---|---|---|
+| **frontend** (nginx) | http://localhost:8080/ | interfaccia utente |
+| | http://localhost:8080/agent | console operatore |
+| **backend** (FastAPI) | http://localhost:8000/docs | API e grafo LangGraph |
+| **qdrant** | http://localhost:6333/dashboard | database vettoriale |
+| **mlflow** | http://localhost:5000 | trace delle esecuzioni |
 
-Funziona subito senza chiave API (modalità mock). Per usare Gemini davvero,
-copia `.env.example` in `.env` e imposta `GEMINI_API_KEY`.
+Sequenza di avvio, garantita dalle condizioni in `depends_on`:
 
-Prova questo scenario end-to-end:
-1. Da `/`, scrivi "I can't access the company VPN" → il ticket va in escalation, l'utente vede un messaggio di attesa (senza poter modificare nulla).
-2. Apri `/agent` (in un'altra scheda): il ticket compare in coda.
-3. Clicca sul ticket, modifica o approva la bozza, invia.
-4. Torna sulla scheda utente: entro ~3 secondi (polling) compare la risposta, marcata "✓ verificata da un operatore".
+```
+qdrant (healthy) ──▶ ingestion (completato) ──▶ backend (healthy) ──▶ frontend
+mlflow (healthy) ──────────────────────────────▶
+```
+
+**Il job di ingestion.** Gira a ogni `docker compose up`, prima del backend:
+crea le collection se non esistono, altrimenti le **aggiorna in modo
+incrementale**. Ogni punto porta nel payload l'hash del testo embeddato e
+della configurazione di embedding, quindi al riavvio si ri-embeddano solo i
+chunk nuovi o modificati e si cancellano quelli spariti dalla sorgente. Senza
+modifiche alla knowledge base il costo in chiamate all'API è **zero** (invece
+di 168 embedding a ogni avvio). Cambiare modello o dimensione dell'embedding
+invalida gli hash e forza la ricostruzione, che è il comportamento corretto:
+vettori di provider diversi vivono in spazi incompatibili.
+
+Il backend non parte finché l'ingestion non è uscita con successo
+(`condition: service_completed_successfully`): senza quel vincolo le prime
+richieste troverebbero collection vuote e ogni ticket verrebbe escalato per
+"retrieval senza appigli".
+
+**Perché il frontend è nginx con reverse proxy.** Separando il frontend in un
+servizio a sé, le pagine sarebbero servite da un'origine diversa da quella
+dell'API: CORS da configurare e URL del backend da iniettare nel JavaScript.
+Con nginx che inoltra `/api/` al backend, browser e pagine vedono una sola
+origine e **il codice JavaScript resta identico** a quello che gira in
+sviluppo locale, dove è FastAPI a servire tutto.
+
+## Avvio locale senza Docker
+
+```bash
+uv sync                     # oppure: pip install -r requirements.txt
+uv run uvicorn app.main:app --reload
+```
+
+- `http://localhost:8000/` — interfaccia **utente**
+- `http://localhost:8000/agent` — interfaccia **operatore**
+
+In locale FastAPI serve anche le pagine statiche e `app/retrieval.py`
+indicizza automaticamente all'import (`AUTO_INDEX=true` di default), quindi
+non serve lanciare l'ingestion a mano. Qdrant gira in modalità *embedded*
+(`QDRANT_PATH`, un indice su disco) e MLflow scrive su `./mlruns`: nessun
+servizio esterno da avviare.
+
+Funziona subito senza chiave API, in modalità mock. Prova questo scenario
+end-to-end:
+1. Da `/`, scrivi "I clicked a phishing link and entered my password" → il
+   ticket va in escalation, l'utente vede un messaggio di attesa.
+2. Apri `/agent`: il ticket è in coda, con l'elenco dei trigger che l'hanno
+   causato e la clausola di policy di ciascuno.
+3. Modifica o approva la bozza, invia.
+4. Torna sulla scheda utente: entro ~3 secondi (polling) compare la risposta,
+   marcata "✓ verified by an agent".
+
+## Gestione delle dipendenze: uv
+
+`pyproject.toml` dichiara le dipendenze, `uv.lock` fissa le versioni esatte ed
+**è versionato**: è ciò che rende identico l'ambiente tra la macchina di
+sviluppo e i container. Le immagini usano `uv sync --frozen`, che fallisce se
+il lock non è allineato al `pyproject` invece di risolvere silenziosamente
+versioni diverse da quelle testate.
+
+`matplotlib`, usata solo da `analysis/eda.py`, sta in un extra `analysis` e
+non entra nell'immagine del backend:
+
+```bash
+uv sync --extra analysis && uv run python analysis/eda.py
+```
 
 ## Architettura del grafo
 
@@ -273,6 +338,7 @@ app/
 ├── graph.py       # StateGraph LangGraph: retrieval + agent + decisione + HITL + finalize
 ├── escalation.py   # logica multisegnale di escalation (regole di policy)
 ├── tracing.py      # setup del tracing MLflow
+├── ingest.py       # entrypoint del job di ingestion (python -m app.ingest)
 ├── retrieval.py    # indicizzazione e query sulle due collection Qdrant
 ├── llm.py         # chiamata a Gemini (o mock): bozza, confidenza e segnali sul ticket
 ├── store.py        # TicketStore in-memory (coda per l'interfaccia operatore)
@@ -285,6 +351,21 @@ app/
     ├── shared.css    # design tokens comuni alle due interfacce
     ├── index.html     # interfaccia UTENTE
     └── agent.html      # interfaccia OPERATORE
+
+docker/
+├── backend.Dockerfile   # backend e job di ingestion (stessa immagine)
+├── frontend.Dockerfile  # nginx con le due pagine statiche
+├── mlflow.Dockerfile    # tracking server
+└── nginx.conf           # routing e reverse proxy verso il backend
+
+analysis/
+├── eda.py               # analisi esplorativa rigenerabile
+├── eda_report.md        # report prodotto
+└── figures/             # grafici
+
+docker-compose.yml   # orchestrazione dei 4 servizi + job di ingestion
+pyproject.toml       # dipendenze (uv)
+uv.lock              # versioni fissate, versionato
 ```
 
 ## Riferimento API
@@ -339,11 +420,33 @@ va rivisto se si introduce un checkpointer persistente.
 3. **Taratura delle soglie** — una volta attivi gli embedding Gemini,
    rimisurare `ESCALATION_MIN_RETRIEVAL_SCORE` e le soglie del segnale
    "precedente" sui punteggi reali.
-4. **Deploy con Docker Compose** — quattro servizi: `frontend`, `backend`,
-   `qdrant` (non più locale ma containerizzato: cambia solo l'argomento del
-   client da `path=` a `url=`), `mlflow`. Con job di ingestion che popola le
-   collection all'avvio, creandole se assenti e aggiornandole altrimenti.
-   Package manager: **uv**.
+4. **Verifica del deploy su Docker** — i file di build e il compose sono
+   scritti e validati staticamente, ma **non sono mai stati eseguiti**: vanno
+   provati con un `docker compose up --build` reale (vedi "Limiti noti").
+
+## Limiti noti
+
+- **Il deploy Docker non è stato eseguito.** Dockerfile, `nginx.conf` e
+  `docker-compose.yml` sono stati scritti e validati staticamente (sintassi
+  YAML, grafo delle dipendenze, e `uv sync --frozen` provato davvero), ma
+  nessun container è mai stato costruito o avviato. Le versioni delle immagini
+  base e l'healthcheck di Qdrant — che usa il redirect bash su `/dev/tcp`,
+  perché quell'immagine non include `curl` né `wget` — sono i punti più
+  probabili da correggere al primo avvio reale.
+- **Il percorso Gemini non è stato provato contro l'API vera**, per assenza di
+  connettività verso `generativelanguage.googleapis.com` nell'ambiente di
+  sviluppo. Il codice è scritto sulle firme reali dell'SDK `google-genai`, ma
+  la prima esecuzione con una chiave valida è a tutti gli effetti un test da
+  fare.
+- **Le soglie di escalation non sono tarate.**
+  `ESCALATION_MIN_RETRIEVAL_SCORE` è calibrata sull'embedding di fallback: con
+  quello, scatta quasi sempre e produce sovra-escalation. Va rimisurata sui
+  punteggi reali di Gemini.
+- Quando il grafo si sospende su `interrupt()`, il tracer MLflow emette un
+  warning (`MlflowLangchainTracer has no attribute 'on_interrupt'`): innocuo,
+  la trace viene registrata comunque.
+- Nessuna autenticazione: chiunque raggiunga `/agent` può risolvere ticket, e
+  le liste di conversazioni sono globali.
 
 ## Estensioni minori già identificate
 

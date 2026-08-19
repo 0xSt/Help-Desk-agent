@@ -56,7 +56,6 @@ from app.tracing import trace_span
 logger = logging.getLogger(__name__)
 
 KB_DIR = Path(__file__).parent / "knowledge_base"
-QDRANT_PATH = os.environ.get("QDRANT_PATH", "qdrant_data")
 
 KB_DOCS_COLLECTION = "kb_docs"
 KB_TICKETS_COLLECTION = "kb_tickets"
@@ -73,8 +72,10 @@ _ID_NAMESPACE = uuid.UUID("a13a1b2c-6f6e-4c1a-9c1f-0e5b6f3a2b10")
 # In locale l'indice sta su disco (nessun server esterno). In Docker Compose
 # si valorizza QDRANT_URL e lo stesso client punta al servizio containerizzato:
 # cambia solo l'argomento del costruttore.
-QDRANT_URL = os.environ.get("QDRANT_URL")
-_client = QdrantClient(url=QDRANT_URL) if QDRANT_URL else QdrantClient(path=QDRANT_PATH)
+_client = (
+    QdrantClient(url=config.QDRANT_URL) if config.QDRANT_URL
+    else QdrantClient(path=config.QDRANT_PATH)
+)
 
 
 # --------------------------------------------------------------------------
@@ -222,34 +223,20 @@ def _split_policy_into_sections(md_text: str, source: str) -> List[Dict[str, Any
     return sections
 
 
-def _index_kb_docs() -> None:
+def _kb_docs_items() -> List[Dict[str, Any]]:
+    """Costruisce i punti da indicizzare per la KB delle policy."""
+    items = []
     policies_dir = KB_DIR / "policies"
-    sections: List[Dict[str, Any]] = []
     for md_path in sorted(policies_dir.glob("*.md")):
         text = md_path.read_text(encoding="utf-8")
         for section in _split_policy_into_sections(text, md_path.stem):
             section["source"] = md_path.name
-            section["_key"] = f"{md_path.stem}:{section['section_title']}"
-            sections.append(section)
-
-    if not sections:
-        return
-
-    # Un'unica chiamata a batch per tutte le sezioni, invece di una per
-    # sezione: 60 richieste HTTP diventano 2 (batch da 32).
-    vectors = embed_texts([s["text"] for s in sections], TASK_DOCUMENT)
-
-    points = []
-    for section, vector in zip(sections, vectors):
-        key = section.pop("_key")
-        points.append(PointStruct(
-            id=str(uuid.uuid5(_ID_NAMESPACE, key)),
-            vector=vector,
-            payload=section,
-        ))
-    _client.upsert(KB_DOCS_COLLECTION, points=points)
-    logger.info("kb_docs indicizzata: %d chunk da %d file di policy",
-                len(points), len(list(policies_dir.glob("*.md"))))
+            items.append({
+                "id": str(uuid.uuid5(_ID_NAMESPACE, f"{md_path.stem}:{section['section_title']}")),
+                "text": section["text"],
+                "payload": section,
+            })
+    return items
 
 
 # --------------------------------------------------------------------------
@@ -285,35 +272,40 @@ def _ticket_payload(ticket: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _index_kb_tickets() -> None:
-    """
-    Indicizza lo storico ticket (`past_tickets.json`), un punto per ticket.
-
-    L'intero corpus è materiale simulato per questo progetto universitario:
-    non c'è distinzione tra ticket "reali" e "sintetici", sono tutti dati di
-    scenario trattati allo stesso modo.
-    """
-    tickets_path = KB_DIR / "past_tickets.json"
-    tickets = json.loads(tickets_path.read_text(encoding="utf-8"))
-    if not tickets:
-        return
-
-    vectors = embed_texts([_ticket_embed_text(t) for t in tickets], TASK_DOCUMENT)
-    points = [
-        PointStruct(
-            id=str(uuid.uuid5(_ID_NAMESPACE, t["ticket_id"])),
-            vector=vector,
-            payload=_ticket_payload(t),
-        )
-        for t, vector in zip(tickets, vectors)
+def _kb_tickets_items() -> List[Dict[str, Any]]:
+    """Costruisce i punti da indicizzare per la KB dello storico ticket."""
+    tickets = json.loads((KB_DIR / "past_tickets.json").read_text(encoding="utf-8"))
+    return [
+        {
+            "id": str(uuid.uuid5(_ID_NAMESPACE, t["ticket_id"])),
+            "text": _ticket_embed_text(t),
+            "payload": _ticket_payload(t),
+        }
+        for t in tickets
     ]
-    _client.upsert(KB_TICKETS_COLLECTION, points=points)
-    logger.info("kb_tickets indicizzata: %d ticket storici", len(points))
 
 
 # --------------------------------------------------------------------------
-# Setup: crea le collection e indicizza, solo se non è già stato fatto
+# Sincronizzazione incrementale delle collection
 # --------------------------------------------------------------------------
+
+# Chiave di payload in cui salviamo l'hash del testo embeddato. È ciò che
+# permette di distinguere un punto immutato da uno modificato senza doverlo
+# ri-embeddare per scoprirlo.
+HASH_FIELD = "_content_hash"
+
+
+def _content_hash(text: str) -> str:
+    """
+    Hash del testo embeddato *e* della configurazione di embedding.
+
+    Includere modello e dimensione nell'hash è essenziale: cambiando modello
+    lo stesso testo produce un vettore diverso, quindi il punto va rigenerato
+    anche se il contenuto non è cambiato di una virgola.
+    """
+    material = f"{config.embedding_provider()}|{config.GEMINI_EMBEDDING_MODEL}|{config.active_embedding_dim()}|{text}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
+
 
 def _collection_dim(name: str) -> Optional[int]:
     """Dimensione dei vettori di una collection esistente, o None se non esiste."""
@@ -323,60 +315,114 @@ def _collection_dim(name: str) -> Optional[int]:
     return getattr(params, "size", None)
 
 
-def _ensure_collection(name: str, index_fn) -> None:
+def _existing_hashes(name: str) -> Dict[str, str]:
+    """Mappa {point_id: content_hash} dei punti già presenti in collection."""
+    existing: Dict[str, str] = {}
+    offset = None
+    while True:
+        points, offset = _client.scroll(
+            name, limit=256, offset=offset,
+            with_payload=[HASH_FIELD], with_vectors=False,
+        )
+        for p in points:
+            existing[str(p.id)] = (p.payload or {}).get(HASH_FIELD, "")
+        if offset is None:
+            break
+    return existing
+
+
+def sync_collection(name: str, items: List[Dict[str, Any]]) -> Dict[str, int]:
     """
-    Crea e popola la collection se manca, oppure la ricostruisce se la sua
-    dimensione non corrisponde al provider di embedding attivo.
+    Porta la collection allo stato descritto da `items`.
 
-    Il controllo sulla dimensione è ciò che rende indolore il passaggio da un
-    provider all'altro (o il cambio di `EMBEDDING_DIM`): senza, un indice
-    costruito con l'hashing trick a 256 dimensioni verrebbe interrogato con
-    vettori Gemini a 768 e Qdrant fallirebbe a query time con un errore
-    difficile da ricondurre alla causa. Vettori di provider diversi non sono
-    comunque confrontabili, quindi ricostruire è l'unica opzione corretta.
+    Comportamento richiesto dal deploy: **se la collection non esiste viene
+    creata e popolata; se esiste viene aggiornata**, non ricostruita da zero.
+    L'aggiornamento è incrementale grazie all'hash del contenuto salvato nel
+    payload: si ri-embeddano solo i punti nuovi o modificati, e si cancellano
+    quelli spariti dalla sorgente. Su un riavvio senza modifiche alla KB il
+    costo in chiamate all'API di embedding è **zero**, il che conta quando
+    ogni `docker compose up` ripasserebbe altrimenti da 168 embedding.
+
+    Se la dimensione dei vettori non corrisponde al provider attivo la
+    collection viene invece ricreata: vettori di provider diversi vivono in
+    spazi incompatibili e non sono mescolabili.
     """
-    want = config.active_embedding_dim()
-    have = _collection_dim(name)
+    want_dim = config.active_embedding_dim()
+    have_dim = _collection_dim(name)
 
-    if have == want:
-        return
-
-    if have is not None:
+    if have_dim is not None and have_dim != want_dim:
         logger.warning(
-            "Collection '%s' ha vettori a %d dimensioni ma il provider attivo (%s) "
-            "ne produce %d: ricostruisco l'indice da zero.",
-            name, have, config.embedding_provider(), want,
+            "Collection '%s': vettori a %d dimensioni ma il provider attivo (%s) "
+            "ne produce %d. Ricostruisco da zero.",
+            name, have_dim, config.embedding_provider(), want_dim,
         )
         _client.delete_collection(name)
+        have_dim = None
 
-    _client.create_collection(
-        name,
-        vectors_config=VectorParams(size=want, distance=Distance.COSINE),
+    created = have_dim is None
+    if created:
+        _client.create_collection(
+            name, vectors_config=VectorParams(size=want_dim, distance=Distance.COSINE)
+        )
+
+    for it in items:
+        it["hash"] = _content_hash(it["text"])
+
+    existing = {} if created else _existing_hashes(name)
+    to_upsert = [it for it in items if existing.get(it["id"]) != it["hash"]]
+    desired_ids = {it["id"] for it in items}
+    to_delete = [pid for pid in existing if pid not in desired_ids]
+
+    if to_upsert:
+        vectors = embed_texts([it["text"] for it in to_upsert], TASK_DOCUMENT)
+        _client.upsert(name, points=[
+            PointStruct(
+                id=it["id"],
+                vector=vec,
+                payload={**it["payload"], HASH_FIELD: it["hash"]},
+            )
+            for it, vec in zip(to_upsert, vectors)
+        ])
+
+    if to_delete:
+        _client.delete(name, points_selector=to_delete)
+
+    stats = {
+        "total": len(items),
+        "upserted": len(to_upsert),
+        "deleted": len(to_delete),
+        "unchanged": len(items) - len(to_upsert),
+        "created": int(created),
+    }
+    logger.info(
+        "Collection '%s': %d punti totali (%s, %d aggiornati/nuovi, %d invariati, %d rimossi)",
+        name, stats["total"],
+        "creata" if created else "aggiornata",
+        stats["upserted"], stats["unchanged"], stats["deleted"],
     )
-    try:
-        index_fn()
-    except Exception:
-        # In indicizzazione NON si degrada al fallback: un indice a provider
-        # misto sarebbe silenziosamente inutilizzabile. Meglio lasciare la
-        # collection vuota e far emergere l'errore.
-        logger.exception("Indicizzazione di '%s' fallita: la collection resta vuota.", name)
-        raise
+    return stats
 
 
-def ensure_index() -> None:
+def ensure_index() -> Dict[str, Dict[str, int]]:
     """
-    Costruisce l'indice se serve. Chiamata all'import del modulo, e
-    richiamabile esplicitamente dal job di ingestion in Docker Compose.
+    Sincronizza entrambe le collection. È il punto d'ingresso usato sia
+    dall'auto-indicizzazione locale sia dal job di ingestion in Docker Compose
+    (vedi `app/ingest.py`).
     """
-    logger.info("Provider di embedding attivo: %s (%d dimensioni)",
-                config.embedding_provider(), config.active_embedding_dim())
-    _ensure_collection(KB_DOCS_COLLECTION, _index_kb_docs)
-    _ensure_collection(KB_TICKETS_COLLECTION, _index_kb_tickets)
+    logger.info(
+        "Provider di embedding: %s | modello: %s | dimensione: %d",
+        config.embedding_provider(), config.GEMINI_EMBEDDING_MODEL, config.active_embedding_dim(),
+    )
+    return {
+        KB_DOCS_COLLECTION: sync_collection(KB_DOCS_COLLECTION, _kb_docs_items()),
+        KB_TICKETS_COLLECTION: sync_collection(KB_TICKETS_COLLECTION, _kb_tickets_items()),
+    }
 
 
 # --------------------------------------------------------------------------
 # Query — usate dai nodi di retrieval in graph.py
 # --------------------------------------------------------------------------
+
 
 @trace_span("retrieval.kb_docs")
 def search_kb_docs(query: str, k: int = config.RETRIEVAL_TOP_K) -> List[Dict[str, Any]]:
@@ -401,5 +447,8 @@ def search_kb_tickets(query: str, k: int = config.RETRIEVAL_TOP_K) -> List[Dict[
         return []
 
 
-# Costruisce l'indice al primo import del modulo (una volta per processo).
-ensure_index()
+# Auto-indicizzazione all'import: comoda in sviluppo locale (avvii uvicorn e
+# l'indice c'è), ma va disattivata in Docker Compose, dove è un servizio di
+# ingestion dedicato a popolare Qdrant prima che il backend parta.
+if config.AUTO_INDEX:
+    ensure_index()

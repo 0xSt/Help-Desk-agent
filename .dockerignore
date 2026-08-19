@@ -1,0 +1,25 @@
+# Contesto di build: escludi tutto ciò che non serve dentro le immagini.
+.git/
+.gitignore
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Segreti: non devono mai finire in un layer dell'immagine.
+.env
+
+# Artefatti locali, ricostruibili nei container
+qdrant_data/
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Analisi e documentazione: non servono a runtime
+analysis/
+README.md
+LICENSE
+
+.DS_Store
+.idea/
+.vscode/

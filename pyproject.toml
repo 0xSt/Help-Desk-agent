@@ -1,0 +1,32 @@
+[project]
+name = "helpdesk-hitl"
+version = "0.1.0"
+description = "Help desk IT con agente AI, retrieval su due knowledge base e human-in-the-loop"
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "langgraph>=1.0",
+    # Non importato direttamente dal nostro codice, ma richiesto da
+    # mlflow.langchain.autolog() per strumentare l'esecuzione del grafo.
+    "langchain>=1.0",
+    "pydantic>=2.0",
+    "qdrant-client>=1.9",
+    "google-genai>=1.0",
+    "mlflow>=3.0",
+]
+
+[project.optional-dependencies]
+# Usate solo dall'analisi esplorativa (analysis/eda.py), non dal servizio:
+# tenerle fuori dalle dipendenze principali evita di appesantire l'immagine
+# del backend con matplotlib e il suo stack.
+analysis = [
+    "matplotlib>=3.8",
+]
+
+[tool.uv]
+# Il lockfile va committato: è ciò che rende le build riproducibili tra la
+# macchina di sviluppo e i container.
+package = false
