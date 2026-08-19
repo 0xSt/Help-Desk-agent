@@ -26,7 +26,7 @@ Produce:
 """
 import json
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 
 import matplotlib
@@ -44,14 +44,8 @@ TOKENS_PER_WORD = 1.3
 
 
 def load_tickets():
-    """Carica tutti i file di ticket presenti (reali + eventuali sintetici)."""
-    tickets = []
-    for path in sorted(KB_DIR.glob("past_tickets*.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
-        for t in data:
-            t["_source_file"] = path.name
-        tickets.extend(data)
-    return tickets
+    """Carica lo storico ticket. Corpus unico: tutti i dati sono simulati."""
+    return json.loads((KB_DIR / "past_tickets.json").read_text(encoding="utf-8"))
 
 
 def load_policy_sections():
@@ -142,9 +136,9 @@ def main():
 
     # ---------------------------------------------------------------- KB 1
     A("## 1. KB ticket storici\n")
-    by_file = Counter(t["_source_file"] for t in tickets)
-    A(f"**{n} ticket** totali, da {len(by_file)} file: "
-      + ", ".join(f"`{f}` ({c})" for f, c in sorted(by_file.items())) + ".\n")
+    A(f"**{n} ticket** in `past_tickets.json`. L'intero corpus è materiale "
+      "simulato costruito per questo progetto: non esiste distinzione tra dati "
+      "reali e sintetici, sono tutti dati di scenario trattati allo stesso modo.\n")
 
     A("### 1.1 Schema\n")
     all_keys = sorted({k for t in tickets for k in t if not k.startswith("_")})
@@ -245,30 +239,6 @@ def main():
     A(f"POL-005 §8 impone escalation per **ogni** ticket Security. "
       f"Ticket Security presenti: {len(sec)}, di cui non escalati: "
       f"**{len(sec_not_esc)}**" + (f" ({', '.join(sec_not_esc)})" if sec_not_esc else " ✓ coerente") + ".\n")
-
-    # ------------------------------------------- confronto reale / sintetico
-    if len(by_file) > 1:
-        A("### 2.4 Confronto reale vs sintetico\n")
-        A("La KB è stata estesa con ticket sintetici che replicano la "
-          "distribuzione dell'insieme reale. Il confronto serve a verificare "
-          "che l'estensione non abbia introdotto shift, e abilita split di "
-          "evaluation del tipo *indicizza i sintetici, valuta sui reali*.\n")
-        groups = defaultdict(list)
-        for t in tickets:
-            groups["synthetic" if "synthetic" in t["_source_file"] else "real"].append(t)
-        rows = []
-        for cat, _ in cat_counter.most_common():
-            cells = []
-            for g in ("real", "synthetic"):
-                sub = [t for t in groups[g] if t["category"] == cat]
-                e = sum(1 for t in sub if t["was_escalated_to_human"])
-                cells += [len(sub), e]
-            rows.append([cat] + cells)
-        A(fmt_table(["Categoria", "N reali", "esc. reali", "N sintetici", "esc. sintetici"], rows) + "\n")
-        for g in ("real", "synthetic"):
-            gt = groups[g]
-            ge = sum(1 for t in gt if t["was_escalated_to_human"])
-            A(f"- **{g}**: {len(gt)} ticket, {ge} escalati ({ge / len(gt):.1%})\n")
 
     # ------------------------------------------------------ testi/embedding
     A("## 3. Caratteristiche dei testi (vincoli per l'embedding)\n")

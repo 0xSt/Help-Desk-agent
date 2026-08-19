@@ -4,7 +4,7 @@
 
 ## 1. KB ticket storici
 
-**108 ticket** totali, da 2 file: `past_tickets.json` (54), `past_tickets_synthetic.json` (54).
+**108 ticket** in `past_tickets.json`. L'intero corpus è materiale simulato costruito per questo progetto: non esiste distinzione tra dati reali e sintetici, sono tutti dati di scenario trattati allo stesso modo.
 
 ### 1.1 Schema
 
@@ -102,24 +102,6 @@ Ticket escalati non riconducibili a un trigger §3: **2** (TCK-2026-00224, TCK-2
 ### 2.3 Coerenza con le policy
 
 POL-005 §8 impone escalation per **ogni** ticket Security. Ticket Security presenti: 14, di cui non escalati: **0** ✓ coerente.
-
-### 2.4 Confronto reale vs sintetico
-
-La KB è stata estesa con ticket sintetici che replicano la distribuzione dell'insieme reale. Il confronto serve a verificare che l'estensione non abbia introdotto shift, e abilita split di evaluation del tipo *indicizza i sintetici, valuta sui reali*.
-
-| Categoria | N reali | esc. reali | N sintetici | esc. sintetici |
-|---|---|---|---|---|
-| Account & Access Management | 13 | 2 | 13 | 2 |
-| Hardware | 11 | 1 | 11 | 1 |
-| Network & Connectivity | 8 | 1 | 8 | 1 |
-| Software | 7 | 2 | 7 | 2 |
-| Security | 7 | 7 | 7 | 7 |
-| Email & Communication | 5 | 0 | 5 | 0 |
-| Cloud & Collaboration Tools | 3 | 0 | 3 | 0 |
-
-- **real**: 54 ticket, 13 escalati (24.1%)
-
-- **synthetic**: 54 ticket, 13 escalati (24.1%)
 
 ## 3. Caratteristiche dei testi (vincoli per l'embedding)
 

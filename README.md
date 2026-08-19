@@ -82,14 +82,15 @@ Le due knowledge base vivono in `app/knowledge_base/`:
   collection `kb_docs`, **una sezione (`## Titolo`) per punto**: ogni chunk
   porta con sé il titolo del documento come contesto, così resta
   comprensibile anche isolato dal resto del file.
-- `past_tickets*.json` — lo storico ticket, indicizzato come collection
-  `kb_tickets`, **un ticket per punto**. Viene embeddato solo il "lato
-  problema" (oggetto + descrizione, ciò a cui una nuova richiesta
+- `past_tickets.json` — lo storico ticket (108 record), indicizzato come
+  collection `kb_tickets`, **un ticket per punto**. Viene embeddato solo il
+  "lato problema" (oggetto + descrizione, ciò a cui una nuova richiesta
   somiglierà), mentre risoluzione/categoria/priorità/esito di escalation
   finiscono nel payload da mostrare come contesto una volta recuperato il punto.
-  Vengono caricati **tutti** i file che corrispondono al pattern: oggi i 54
-  ticket reali più 54 sintetici, distinti nel payload dal campo `dataset`
-  (`"real"` / `"synthetic"`) per poterli separare in fase di evaluation.
+
+L'intero corpus è **materiale simulato** costruito per questo progetto
+universitario: policy e ticket sono scenari fittizi, non esiste distinzione
+tra dati "reali" e "sintetici".
 
 ## Analisi esplorativa
 
@@ -103,13 +104,11 @@ le indicazioni per la costruzione dei dataset di evaluation. Si rigenera con:
 python analysis/eda.py
 ```
 
-**Estensione sintetica della KB.** I 54 ticket in
-`past_tickets_synthetic.json` replicano *esattamente* la distribuzione dei
-ticket reali per categoria e sottocategoria, e la stessa proporzione di
-escalation per categoria (13/54, 24.1%). Le etichette di escalation sono
-coerenti con i trigger di POL-006 §3, così il dataset esteso resta utilizzabile
-come ground truth. Gli ID usano il prefisso `TCK-2026-002xx` per essere
-distinguibili a colpo d'occhio dai reali (`TCK-2025-001xx`).
+Il corpus è stato ampliato da 54 a 108 ticket mantenendo **identiche** la
+distribuzione per categoria e per sottocategoria e la proporzione di
+escalation per categoria (26/108, 24,1%). Le etichette di escalation sono
+tutte riconducibili a un trigger di POL-006 §3, quindi il corpus resta
+utilizzabile come ground truth per la parte deterministica della logica.
 
 **Qdrant in modalità locale**: `QdrantClient(path="qdrant_data")` non
 richiede un server esterno — scrive l'indice su disco nel processo stesso.
@@ -197,8 +196,7 @@ app/
 ├── schemas.py       # modelli Pydantic (richieste/risposte + coda ticket + thread)
 ├── knowledge_base/
 │   ├── policies/      # POL-001..008-*.md
-│   ├── past_tickets.json            # 54 ticket reali      (dataset="real")
-│   └── past_tickets_synthetic.json  # 54 ticket sintetici  (dataset="synthetic")
+│   └── past_tickets.json  # 108 ticket (corpus simulato unico)
 └── static/
     ├── shared.css    # design tokens comuni alle due interfacce
     ├── index.html     # interfaccia UTENTE
