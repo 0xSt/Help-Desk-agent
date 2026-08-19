@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Help Desk — Agent Console</title>
+<link rel="stylesheet" href="/static/shared.css" />
+<style>
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: calc(100vh - 45px); /* 45px ~ altezza topnav */
+  }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+  }
+
+  /* --- Colonna coda --- */
+  #queue {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow-y: auto;
+  }
+  .queue-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .queue-header h2 { font-size: 14px; margin: 0; }
+  .queue-count {
+    font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+    padding: 1px 8px;
+  }
+  .ticket-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .ticket-item:hover { background: var(--bg); }
+  .ticket-item.active { background: var(--review-bg); }
+  .ticket-item .subject {
+    font-size: 13.5px; font-weight: 600; margin-bottom: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .ticket-item .meta {
+    display: flex; gap: 8px; align-items: center;
+    font-family: var(--mono); font-size: 10.5px; color: var(--text-dim);
+  }
+  .conf-tag {
+    padding: 1px 6px; border-radius: 5px;
+    border: 1px solid var(--review-border); color: var(--review);
+  }
+  .empty-state {
+    padding: 32px 16px; text-align: center; color: var(--text-dim); font-size: 13px;
+  }
+
+  /* --- Sezione "conversazioni attive" (chiusura thread) --- */
+  .thread-item {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .thread-item .info { min-width: 0; }
+  .thread-item .subject {
+    font-size: 13px; font-weight: 500;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .thread-item .meta {
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim); margin-top: 2px;
+  }
+  .btn-close-thread {
+    flex: none;
+    font-family: var(--sans); font-size: 12px; font-weight: 600;
+    padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-dim); cursor: pointer;
+  }
+  .btn-close-thread:hover { color: #b3392f; border-color: #b3392f; }
+
+  /* --- Colonna dettaglio --- */
+  #detail {
+    overflow-y: auto;
+    padding: 24px 28px 60px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .detail-placeholder {
+    margin: auto; color: var(--text-dim); font-size: 14px; text-align: center;
+  }
+  .detail-header h2 { font-size: 17px; margin: 0 0 4px; }
+  .detail-header .ticket-id { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+  .transcript { display: flex; flex-direction: column; gap: 10px; }
+  .transcript .msg {
+    max-width: 80%; padding: 8px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.5;
+  }
+  .transcript .msg.user { align-self: flex-end; background: var(--text); color: #fff; }
+  .transcript .msg.ai { align-self: flex-start; background: var(--ai-bg); color: var(--ai); }
+
+  .review-panel {
+    border: 1px solid var(--review-border);
+    background: var(--review-bg);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .review-panel .label {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase; color: var(--review);
+    margin-bottom: 8px;
+  }
+  .review-panel .reason { font-size: 13px; color: #6b4d0f; margin-bottom: 4px; }
+  .review-panel .confidence { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
+  .review-panel textarea {
+    width: 100%; min-height: 140px; resize: vertical;
+    font-family: var(--sans); font-size: 14px; line-height: 1.5; padding: 10px;
+    border: 1px solid var(--review-border); border-radius: 8px; background: #fffdf8; color: var(--text);
+  }
+  .review-panel textarea:focus { outline: 2px solid var(--review); outline-offset: 1px; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .actions button {
+    font-family: var(--sans); font-size: 13.5px; font-weight: 600;
+    padding: 8px 16px; border-radius: 7px; border: 1px solid transparent; cursor: pointer;
+  }
+  .btn-approve { background: var(--review); color: #fff; }
+  .btn-approve:hover { opacity: 0.9; }
+  .btn-approve:disabled { opacity: 0.5; cursor: default; }
+  .btn-secondary { background: transparent; border-color: var(--review-border); color: var(--review); }
+
+  .kb-context {
+    font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+    border: 1px dashed var(--border); border-radius: 8px; padding: 8px 10px;
+  }
+
+  .toast {
+    align-self: flex-start;
+    background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <span class="brand">Agent Console</span>
+  <a href="/">← User view</a>
+</nav>
+
+<div class="layout">
+  <aside id="queue">
+    <div class="queue-header">
+      <h2>Tickets in queue</h2>
+      <span class="queue-count" id="queueCount">0</span>
+    </div>
+    <div id="queueList"></div>
+
+    <div class="queue-header">
+      <h2>Active conversations</h2>
+      <span class="queue-count" id="threadsCount">0</span>
+    </div>
+    <div id="threadsList"></div>
+  </aside>
+
+  <section id="detail">
+    <p class="detail-placeholder" id="placeholder">Select a ticket from the queue to see its full context.</p>
+  </section>
+</div>
+
+<script>
+  const queueList = document.getElementById('queueList');
+  const queueCount = document.getElementById('queueCount');
+  const detail = document.getElementById('detail');
+
+  let selectedTicketId = null;
+  let currentQueue = [];
+
+  function timeAgo(unixSeconds) {
+    const diff = Math.max(0, Date.now() / 1000 - unixSeconds);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    return `${Math.floor(diff / 3600)} h ago`;
+  }
+
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s ?? '';
+    return d.innerHTML;
+  }
+
+  // --- Coda: interrogata periodicamente. Non tocca il pannello di
+  // dettaglio se il ticket aperto è ancora presente in coda, per non
+  // disturbare l'operatore mentre sta scrivendo una risposta. ---
+  async function refreshQueue() {
+    let data;
+    try {
+      const res = await fetch('/api/tickets');
+      data = await res.json();
+    } catch (err) {
+      return;
+    }
+    currentQueue = data.tickets;
+    queueCount.textContent = currentQueue.length;
+
+    if (currentQueue.length === 0) {
+      queueList.innerHTML = '<div class="empty-state">No tickets waiting. 🎉</div>';
+    } else {
+      queueList.innerHTML = '';
+      currentQueue.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'ticket-item' + (t.ticket_id === selectedTicketId ? ' active' : '');
+        item.innerHTML = `
+          <div class="subject">${escapeHtml(t.subject)}</div>
+          <div class="meta">
+            <span class="conf-tag">conf. ${t.confidence != null ? t.confidence.toFixed(2) : 'n/a'}</span>
+            <span>${timeAgo(t.created_at)}</span>
+          </div>
+        `;
+        item.addEventListener('click', () => openTicket(t.ticket_id));
+        queueList.appendChild(item);
+      });
+    }
+
+    // Se il ticket selezionato è sparito dalla coda (es. risolto da
+    // un'altra sessione operatore) e non è stato appena risolto da qui,
+    // torna al placeholder.
+    if (selectedTicketId && !currentQueue.some(t => t.ticket_id === selectedTicketId)) {
+      const stillOpen = detail.querySelector('.review-panel');
+      if (stillOpen && !detail.dataset.justResolved) {
+        selectedTicketId = null;
+        detail.innerHTML = '<p class="detail-placeholder">This ticket is no longer in the queue (resolved elsewhere).</p>';
+      }
+    }
+  }
+
+  async function openTicket(ticketId) {
+    selectedTicketId = ticketId;
+    document.querySelectorAll('.ticket-item').forEach(el => el.classList.remove('active'));
+    refreshQueue(); // aggiorna subito l'evidenziazione della selezione
+
+    detail.innerHTML = '<p class="detail-placeholder">Loading…</p>';
+    const res = await fetch('/api/state/' + encodeURIComponent(ticketId));
+    if (!res.ok) {
+      detail.innerHTML = '<p class="detail-placeholder">Ticket not found.</p>';
+      return;
+    }
+    const data = await res.json();
+    renderDetail(ticketId, data);
+  }
+
+  function renderDetail(ticketId, data) {
+    detail.innerHTML = '';
+    delete detail.dataset.justResolved;
+
+    const header = document.createElement('div');
+    header.className = 'detail-header';
+    header.innerHTML = `<h2>Ticket</h2><span class="ticket-id">${ticketId}</span>`;
+    detail.appendChild(header);
+
+    const transcript = document.createElement('div');
+    transcript.className = 'transcript';
+    (data.history || []).forEach(turn => {
+      const m = document.createElement('div');
+      m.className = 'msg ' + (turn.role === 'user' ? 'user' : 'ai');
+      m.textContent = turn.content;
+      transcript.appendChild(m);
+    });
+    // Il messaggio corrente (quello che ha innescato l'escalation) non è
+    // ancora in 'history' (viene aggiunto solo da finalize_node a risoluzione
+    // avvenuta) — lo aggiungiamo qui a parte, leggendolo dalla coda.
+    const ticketInfo = currentQueue.find(t => t.ticket_id === ticketId);
+    if (ticketInfo) {
+      const m = document.createElement('div');
+      m.className = 'msg user';
+      m.textContent = ticketInfo.subject;
+      transcript.appendChild(m);
+    }
+    detail.appendChild(transcript);
+
+    if (data.status !== 'awaiting_review') {
+      const info = document.createElement('p');
+      info.className = 'detail-placeholder';
+      info.textContent = 'This ticket has already been resolved.';
+      detail.appendChild(info);
+      return;
+    }
+
+    const panel = document.createElement('div');
+    panel.className = 'review-panel';
+    panel.innerHTML = `
+      <div class="label">AI-generated draft — requires your review</div>
+      <div class="reason">${escapeHtml(data.review_reason || 'No reason specified.')}</div>
+      <div class="confidence">model confidence: ${data.confidence != null ? data.confidence.toFixed(2) : 'n/a'}</div>
+      <textarea id="answerBox">${escapeHtml(data.draft_answer)}</textarea>
+      <div class="actions">
+        <button type="button" class="btn-approve" id="sendBtn">Send response</button>
+        <button type="button" class="btn-secondary" id="resetBtn">Reset to AI draft</button>
+      </div>
+    `;
+    detail.appendChild(panel);
+
+    const textarea = panel.querySelector('#answerBox');
+    panel.querySelector('#resetBtn').addEventListener('click', () => { textarea.value = data.draft_answer; });
+    panel.querySelector('#sendBtn').addEventListener('click', () => submitResolution(ticketId, textarea.value, panel));
+  }
+
+  async function submitResolution(ticketId, editedAnswer, panel) {
+    panel.querySelectorAll('button').forEach(b => b.disabled = true);
+    const res = await fetch('/api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thread_id: ticketId, edited_answer: editedAnswer }),
+    });
+    if (!res.ok) {
+      panel.querySelectorAll('button').forEach(b => b.disabled = false);
+      return;
+    }
+    detail.dataset.justResolved = '1';
+    panel.remove();
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = 'Response sent. The ticket has been removed from the queue.';
+    detail.appendChild(toast);
+    selectedTicketId = null;
+    refreshQueue();
+  }
+
+  // --- Conversazioni attive: lista di TUTTI i thread non chiusi (non solo
+  // quelli in escalation), da cui l'operatore può chiudere una
+  // conversazione con un tasto, indipendentemente dal fatto che sia mai
+  // passata dalla coda ticket. ---
+  const threadsList = document.getElementById('threadsList');
+  const threadsCount = document.getElementById('threadsCount');
+
+  async function refreshThreads() {
+    let data;
+    try {
+      const res = await fetch('/api/threads');
+      data = await res.json();
+    } catch (err) {
+      return;
+    }
+    threadsCount.textContent = data.threads.length;
+
+    if (data.threads.length === 0) {
+      threadsList.innerHTML = '<div class="empty-state">No active conversations.</div>';
+      return;
+    }
+    threadsList.innerHTML = '';
+    data.threads.forEach(t => {
+      const item = document.createElement('div');
+      item.className = 'thread-item';
+      item.innerHTML = `
+        <div class="info">
+          <div class="subject" title="${escapeHtml(t.subject)}">${escapeHtml(t.subject)}</div>
+          <div class="meta">${t.thread_id.slice(0, 8)} · ${timeAgo(t.last_activity_at)}</div>
+        </div>
+        <button type="button" class="btn-close-thread">Close</button>
+      `;
+      item.querySelector('.btn-close-thread').addEventListener('click', () => closeThread(t.thread_id));
+      threadsList.appendChild(item);
+    });
+  }
+
+  async function closeThread(threadId) {
+    if (!confirm('Close this conversation? The user will no longer be able to send messages on this thread.')) return;
+    const res = await fetch('/api/threads/' + encodeURIComponent(threadId) + '/close', { method: 'POST' });
+    if (!res.ok) return;
+
+    // Se il thread chiuso era anche in coda ticket (escalation non ancora
+    // risolta), il backend lo rimuove da ticket_store: aggiorniamo entrambe
+    // le liste. Se era il ticket aperto nel pannello di dettaglio, lo
+    // segnaliamo invece di lasciare un editor "orfano".
+    if (selectedTicketId === threadId) {
+      selectedTicketId = null;
+      detail.innerHTML = '<p class="detail-placeholder">This conversation has been closed.</p>';
+    }
+    refreshThreads();
+    refreshQueue();
+  }
+
+  refreshQueue();
+  refreshThreads();
+  setInterval(refreshQueue, 4000);
+  setInterval(refreshThreads, 4000);
+</script>
+</body>
+</html>

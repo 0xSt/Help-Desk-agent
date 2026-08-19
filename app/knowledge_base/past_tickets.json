@@ -1,0 +1,1543 @@
+[
+  {
+    "ticket_id": "TCK-2025-00101",
+    "created_at": "2025-11-03",
+    "source_channel": "Self-Service Portal",
+    "department": "Finance",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "Password Reset",
+    "priority": "P3",
+    "subject": "Can't log into my laptop, password not working",
+    "description": "I typed my password like always this morning and it says it's incorrect. I haven't changed it recently. I tried three times and now I'm worried it will lock me out.",
+    "resolution_steps": [
+      "Verified requester identity via employee ID and department manager confirmation.",
+      "Confirmed account was not yet locked (2 of 5 allowed attempts used).",
+      "Triggered self-service password reset link to requester's registered personal email.",
+      "Requester set a new password and confirmed successful login."
+    ],
+    "resolution_summary": "Password reset issued after identity verification; requester regained access without hitting lockout threshold.",
+    "resolution_time_minutes": 18,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "password",
+      "login",
+      "self-service",
+      "identity verification"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00102",
+    "created_at": "2025-11-05",
+    "source_channel": "Phone",
+    "department": "Sales",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "Password Reset",
+    "priority": "P3",
+    "subject": "Forgot my password after returning from vacation",
+    "description": "Been out for two weeks, forgot my password completely. Need to get back into email and the CRM today.",
+    "resolution_steps": [
+      "Verified identity via manager confirmation call.",
+      "Issued temporary password with forced change at next login.",
+      "Confirmed requester could log into both laptop and CRM."
+    ],
+    "resolution_summary": "Temporary password issued with forced reset on next login.",
+    "resolution_time_minutes": 15,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "password",
+      "vacation",
+      "crm"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00103",
+    "created_at": "2025-11-06",
+    "source_channel": "Chat",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "Password Reset",
+    "priority": "P4",
+    "subject": "Password reset link expired",
+    "description": "I got the password reset email but I clicked it a day later and it says the link expired. Can you send a new one?",
+    "resolution_steps": [
+      "Confirmed link expiration is expected after 24 hours per policy.",
+      "Re-triggered the reset workflow.",
+      "Requester completed reset within the new window."
+    ],
+    "resolution_summary": "Reissued reset link; requester completed reset successfully.",
+    "resolution_time_minutes": 10,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "password",
+      "expired link"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00104",
+    "created_at": "2025-11-10",
+    "source_channel": "Email",
+    "department": "Human Resources",
+    "requester_role": "Manager",
+    "category": "Account & Access Management",
+    "subcategory": "Password Reset",
+    "priority": "P2",
+    "subject": "Locked out before an important onboarding session",
+    "description": "My account is fully locked and I have a new-hire orientation in 30 minutes that needs my laptop and the HR system. Please help urgently.",
+    "resolution_steps": [
+      "Verified identity urgently via manager's direct supervisor.",
+      "Unlocked account and issued a temporary password.",
+      "Confirmed access restored to laptop and HR information system before the session."
+    ],
+    "resolution_summary": "Expedited unlock and password reset due to time-sensitive business need.",
+    "resolution_time_minutes": 12,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "password",
+      "lockout",
+      "urgent",
+      "hr system"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00105",
+    "created_at": "2025-11-11",
+    "source_channel": "Self-Service Portal",
+    "department": "Operations",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "Account Lockout / MFA",
+    "priority": "P3",
+    "subject": "Account locked after too many failed logins",
+    "description": "I think I mistyped my password a bunch of times this morning while half asleep and now it's locked.",
+    "resolution_steps": [
+      "Confirmed lockout was due to 5 consecutive failed attempts, consistent with policy threshold.",
+      "Verified identity and unlocked the account.",
+      "Advised requester to update saved credentials in browser to avoid recurrence."
+    ],
+    "resolution_summary": "Account unlocked after identity verification; root cause was outdated saved password.",
+    "resolution_time_minutes": 14,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "lockout",
+      "failed attempts",
+      "browser cache"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00106",
+    "created_at": "2025-11-12",
+    "source_channel": "Chat",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "Account Lockout / MFA",
+    "priority": "P2",
+    "subject": "Lost my phone, can't get the MFA code",
+    "description": "My phone with the authenticator app broke this morning and I can't approve the login prompt. I need to get into the VPN for a deployment.",
+    "resolution_steps": [
+      "Verified identity through a secondary method (video call plus employee badge).",
+      "Temporarily issued a backup MFA code valid for 24 hours.",
+      "Opened a follow-up task for requester to re-enroll a new device in the authenticator app.",
+      "Confirmed VPN login succeeded with the backup code."
+    ],
+    "resolution_summary": "Backup MFA code issued after enhanced identity verification; device re-enrollment scheduled.",
+    "resolution_time_minutes": 25,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "mfa",
+      "authenticator",
+      "lost device",
+      "vpn"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00107",
+    "created_at": "2025-11-13",
+    "source_channel": "Email",
+    "department": "Marketing",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "Account Lockout / MFA",
+    "priority": "P3",
+    "subject": "MFA app not generating matching codes anymore",
+    "description": "The codes in my authenticator app don't match what the login page expects anymore, this started yesterday.",
+    "resolution_steps": [
+      "Confirmed the issue was a time-sync drift on the requester's phone.",
+      "Guided requester to enable automatic time sync on their device.",
+      "Verified new codes matched after the fix."
+    ],
+    "resolution_summary": "Resolved via device time-sync correction; no account changes required.",
+    "resolution_time_minutes": 20,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "mfa",
+      "authenticator",
+      "time sync"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00108",
+    "created_at": "2025-11-14",
+    "source_channel": "Phone",
+    "department": "Legal",
+    "requester_role": "Director",
+    "category": "Account & Access Management",
+    "subcategory": "New Account Provisioning / Access Request",
+    "priority": "P2",
+    "subject": "Need a new contractor set up with access to the shared legal drive",
+    "description": "We have an external contractor starting Monday and they need an account plus access to the shared legal review folder only, nothing else.",
+    "resolution_steps": [
+      "Confirmed request against the approved contractor onboarding form signed by the Director.",
+      "Provisioned a time-limited contractor account (90-day expiry).",
+      "Granted read/write access to the specified legal review folder only, no other shares.",
+      "Sent credentials securely to the requester for hand-off to the contractor."
+    ],
+    "resolution_summary": "Contractor account provisioned with scoped access and automatic expiry per contractor policy.",
+    "resolution_time_minutes": 40,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "provisioning",
+      "contractor",
+      "access request",
+      "shared drive"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00109",
+    "created_at": "2025-11-15",
+    "source_channel": "Self-Service Portal",
+    "department": "Finance",
+    "requester_role": "Manager",
+    "category": "Account & Access Management",
+    "subcategory": "New Account Provisioning / Access Request",
+    "priority": "P2",
+    "subject": "Requesting access to the financial reporting system for a new analyst",
+    "description": "New analyst joined the team, needs read access to the quarterly reporting system to start working on reconciliations.",
+    "resolution_steps": [
+      "Verified request included manager approval as required for financial systems.",
+      "Escalated to the finance systems owner for a secondary sign-off per policy.",
+      "Access granted with read-only scope after both approvals received."
+    ],
+    "resolution_summary": "Access granted after dual approval (manager plus system owner) per financial systems policy.",
+    "resolution_time_minutes": 55,
+    "status": "Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Access to financial reporting systems requires system-owner approval in addition to manager approval.",
+    "csat_score": 5,
+    "tags": [
+      "access request",
+      "financial system",
+      "dual approval"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00110",
+    "created_at": "2025-11-16",
+    "source_channel": "Chat",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "New Account Provisioning / Access Request",
+    "priority": "P3",
+    "subject": "Need access to the staging server repo",
+    "description": "Joining the platform team next week, need read/write on the staging repo so I can start reviewing code.",
+    "resolution_steps": [
+      "Confirmed team lead approval on file.",
+      "Granted repository access scoped to the staging environment only.",
+      "Confirmed requester could clone and push to a test branch."
+    ],
+    "resolution_summary": "Repository access granted after team lead approval; scoped to staging only.",
+    "resolution_time_minutes": 22,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "access request",
+      "repository",
+      "staging"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00111",
+    "created_at": "2025-11-17",
+    "source_channel": "Email",
+    "department": "Procurement",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "New Account Provisioning / Access Request",
+    "priority": "P3",
+    "subject": "Need access to the vendor management portal",
+    "description": "I moved teams and now handle vendor onboarding, I need access to the vendor management portal that I didn't have before.",
+    "resolution_steps": [
+      "Verified new role assignment with the requester's manager.",
+      "Removed access no longer needed from the previous role.",
+      "Granted vendor management portal access matching the new role's standard profile."
+    ],
+    "resolution_summary": "Access updated to match new role; unused prior access revoked as part of the change.",
+    "resolution_time_minutes": 30,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "access request",
+      "role change",
+      "vendor portal"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00112",
+    "created_at": "2025-11-18",
+    "source_channel": "Self-Service Portal",
+    "department": "Sales",
+    "requester_role": "Standard Employee",
+    "category": "Account & Access Management",
+    "subcategory": "Offboarding",
+    "priority": "P2",
+    "subject": "Last working day is Friday, please process account closure",
+    "description": "My last day at the company is this Friday, HR said to open a ticket so IT can process my account and equipment return.",
+    "resolution_steps": [
+      "Confirmed termination date with HR record.",
+      "Scheduled account deactivation for end of day on the requester's last working day.",
+      "Set up mailbox forwarding to the requester's manager for 30 days per policy.",
+      "Generated equipment return checklist for the requester's laptop and badge."
+    ],
+    "resolution_summary": "Offboarding scheduled per standard exit process; account deactivation and mail forwarding configured.",
+    "resolution_time_minutes": 35,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "offboarding",
+      "termination",
+      "mailbox forwarding"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00113",
+    "created_at": "2025-11-19",
+    "source_channel": "Email",
+    "department": "Human Resources",
+    "requester_role": "Manager",
+    "category": "Account & Access Management",
+    "subcategory": "Offboarding",
+    "priority": "P1",
+    "subject": "Immediate access revocation needed for involuntary termination",
+    "description": "We need immediate, same-hour deactivation of an employee's accounts and building access following an involuntary termination effective now.",
+    "resolution_steps": [
+      "Verified request against signed HR involuntary-termination notice.",
+      "Immediately disabled all system accounts, VPN, and badge access.",
+      "Notified security and facilities of the access change.",
+      "Logged the action with timestamp for compliance audit trail."
+    ],
+    "resolution_summary": "All access revoked immediately per involuntary termination protocol; incident logged for audit.",
+    "resolution_time_minutes": 20,
+    "status": "Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Involuntary termination cases require immediate action and are auto-escalated per security policy regardless of resolution speed.",
+    "csat_score": null,
+    "tags": [
+      "offboarding",
+      "involuntary termination",
+      "urgent",
+      "security"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00114",
+    "created_at": "2025-11-04",
+    "source_channel": "Phone",
+    "department": "Operations",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Laptop/Desktop Malfunction",
+    "priority": "P2",
+    "subject": "Laptop won't turn on at all",
+    "description": "Pressed the power button several times, tried a different outlet, nothing happens, not even the charging light.",
+    "resolution_steps": [
+      "Walked through basic power diagnostics (charger swap, hard reset) with no success.",
+      "Confirmed hardware fault was likely the battery or motherboard.",
+      "Issued a loaner laptop same day and scheduled the faulty unit for depot repair."
+    ],
+    "resolution_summary": "Loaner issued same day; faulty laptop sent for hardware repair.",
+    "resolution_time_minutes": 45,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "laptop",
+      "power failure",
+      "loaner",
+      "repair"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00115",
+    "created_at": "2025-11-07",
+    "source_channel": "Chat",
+    "department": "Marketing",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Laptop/Desktop Malfunction",
+    "priority": "P3",
+    "subject": "Laptop fan is really loud and it's getting hot",
+    "description": "Over the last few days my laptop has been running really hot and the fan sounds like it's about to take off, even when I'm just in a browser.",
+    "resolution_steps": [
+      "Checked running processes remotely, found a stuck background update process consuming CPU.",
+      "Terminated the stuck process and cleared temporary update cache.",
+      "Confirmed temperature and fan noise returned to normal after restart."
+    ],
+    "resolution_summary": "Resolved by clearing a stuck update process; no hardware replacement needed.",
+    "resolution_time_minutes": 30,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "laptop",
+      "overheating",
+      "fan noise",
+      "cpu usage"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00116",
+    "created_at": "2025-11-08",
+    "source_channel": "Self-Service Portal",
+    "department": "Finance",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Laptop/Desktop Malfunction",
+    "priority": "P3",
+    "subject": "Screen flickers on and off randomly",
+    "description": "My screen flickers every so often, sometimes goes fully black for a second then comes back. Started this week.",
+    "resolution_steps": [
+      "Updated graphics drivers to the latest approved version.",
+      "Tested with an external monitor to isolate whether the panel or the graphics card was at fault.",
+      "Confirmed flickering persisted only on the internal panel, indicating a display cable issue."
+    ],
+    "resolution_summary": "Driver update did not fully resolve issue; scheduled depot repair for suspected display cable fault.",
+    "resolution_time_minutes": 50,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 3,
+    "tags": [
+      "laptop",
+      "screen flicker",
+      "display",
+      "driver"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00117",
+    "created_at": "2025-11-09",
+    "source_channel": "Phone",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Laptop/Desktop Malfunction",
+    "priority": "P2",
+    "subject": "Spilled coffee on my keyboard, some keys not responding",
+    "description": "I know, I know. Coffee got on the keyboard and now the space bar and a few letter keys aren't responding.",
+    "resolution_steps": [
+      "Powered down the device immediately per liquid-damage guidance.",
+      "Inspected internally at the depot; found liquid residue near the keyboard assembly.",
+      "Replaced the keyboard assembly and verified full functionality.",
+      "Issued a loaner during the repair window."
+    ],
+    "resolution_summary": "Keyboard assembly replaced after liquid damage; loaner issued during repair.",
+    "resolution_time_minutes": 90,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "laptop",
+      "liquid damage",
+      "keyboard",
+      "repair"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00118",
+    "created_at": "2025-11-06",
+    "source_channel": "Chat",
+    "department": "Operations",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Peripheral Issues",
+    "priority": "P4",
+    "subject": "Mouse is skipping and lagging",
+    "description": "My mouse cursor jumps around and lags, I already tried a different USB port.",
+    "resolution_steps": [
+      "Confirmed the wireless mouse's receiver was the likely cause after port testing.",
+      "Replaced batteries and re-paired the receiver.",
+      "Cursor behavior returned to normal."
+    ],
+    "resolution_summary": "Resolved via battery replacement and re-pairing of wireless receiver.",
+    "resolution_time_minutes": 12,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "mouse",
+      "peripheral",
+      "wireless"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00119",
+    "created_at": "2025-11-10",
+    "source_channel": "Self-Service Portal",
+    "department": "Sales",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Peripheral Issues",
+    "priority": "P4",
+    "subject": "External monitor not detected",
+    "description": "Plugged in my second monitor like every day but today my laptop isn't detecting it at all.",
+    "resolution_steps": [
+      "Verified cable and port with a known-working cable.",
+      "Updated display drivers and forced a display detection scan.",
+      "Confirmed monitor was detected and configured in extended mode."
+    ],
+    "resolution_summary": "Resolved via driver update and forced display detection.",
+    "resolution_time_minutes": 20,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "monitor",
+      "peripheral",
+      "display driver"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00120",
+    "created_at": "2025-11-11",
+    "source_channel": "Phone",
+    "department": "Customer Support",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Printer",
+    "priority": "P4",
+    "subject": "Printer on the 3rd floor keeps jamming",
+    "description": "The shared printer near the break room keeps jamming on every other print job today.",
+    "resolution_steps": [
+      "Cleared a paper jam and inspected the paper tray alignment.",
+      "Ran the built-in cleaning cycle and a test print.",
+      "Confirmed several consecutive successful prints with no jams."
+    ],
+    "resolution_summary": "Resolved via jam clearance and printer cleaning cycle.",
+    "resolution_time_minutes": 25,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "printer",
+      "paper jam",
+      "shared device"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00121",
+    "created_at": "2025-11-12",
+    "source_channel": "Email",
+    "department": "Human Resources",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Printer",
+    "priority": "P4",
+    "subject": "Can't print from my laptop anymore",
+    "description": "I used to be able to print to the HR floor printer but now nothing happens when I hit print.",
+    "resolution_steps": [
+      "Checked print queue and found the requester's default printer had been changed automatically after a software update.",
+      "Reinstalled the correct printer driver and set it as default.",
+      "Confirmed successful test print."
+    ],
+    "resolution_summary": "Resolved by reinstalling printer driver and resetting default printer.",
+    "resolution_time_minutes": 18,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "printer",
+      "driver",
+      "default printer"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00122",
+    "created_at": "2025-11-13",
+    "source_channel": "Chat",
+    "department": "Legal",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Printer",
+    "priority": "P3",
+    "subject": "Print quality is very faded",
+    "description": "Everything I print looks really faded and streaky, even on documents that need to be signed.",
+    "resolution_steps": [
+      "Confirmed toner levels were low via the printer's admin panel.",
+      "Requested a toner replacement from facilities.",
+      "Ran a test print after replacement confirming quality restored."
+    ],
+    "resolution_summary": "Resolved by toner replacement; print quality restored.",
+    "resolution_time_minutes": 15,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "printer",
+      "toner",
+      "print quality"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00123",
+    "created_at": "2025-11-14",
+    "source_channel": "Email",
+    "department": "Engineering",
+    "requester_role": "Manager",
+    "category": "Hardware",
+    "subcategory": "Hardware Replacement Request",
+    "priority": "P2",
+    "subject": "Requesting a replacement laptop, current one is 5 years old and struggling",
+    "description": "My laptop is five years old, takes 15 minutes to boot, and can't handle our current build tools. Requesting a replacement for my direct report.",
+    "resolution_steps": [
+      "Checked asset inventory confirming device age exceeded the standard 4-year refresh cycle.",
+      "Submitted a hardware replacement request for manager approval as required for spend above threshold.",
+      "Manager approval received; new standard-issue laptop ordered."
+    ],
+    "resolution_summary": "Replacement approved and ordered after confirming device exceeded refresh cycle and manager sign-off obtained.",
+    "resolution_time_minutes": 40,
+    "status": "Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Hardware replacement requests above the standard cost threshold require manager approval before fulfillment.",
+    "csat_score": 5,
+    "tags": [
+      "hardware replacement",
+      "asset lifecycle",
+      "approval"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00124",
+    "created_at": "2025-11-15",
+    "source_channel": "Self-Service Portal",
+    "department": "Marketing",
+    "requester_role": "Standard Employee",
+    "category": "Hardware",
+    "subcategory": "Hardware Replacement Request",
+    "priority": "P3",
+    "subject": "Requesting a docking station for my new desk",
+    "description": "I moved to a new hot-desk area that doesn't have a docking station, could I get one assigned to me?",
+    "resolution_steps": [
+      "Confirmed availability of a docking station in inventory.",
+      "Assigned unit to requester and logged it against their asset record.",
+      "Confirmed successful setup with dual monitors."
+    ],
+    "resolution_summary": "Docking station issued from existing inventory; no approval required as within standard allowance.",
+    "resolution_time_minutes": 20,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "hardware request",
+      "docking station",
+      "asset"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00125",
+    "created_at": "2025-11-05",
+    "source_channel": "Chat",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Software",
+    "subcategory": "Software Installation Request",
+    "priority": "P3",
+    "subject": "Need a code editor installed",
+    "description": "Need the standard approved code editor installed on my machine, it's not in the self-service catalog for some reason.",
+    "resolution_steps": [
+      "Confirmed the software was on the approved software catalog.",
+      "Pushed installation remotely via the software deployment tool.",
+      "Confirmed successful installation and license activation."
+    ],
+    "resolution_summary": "Installed from approved catalog via remote deployment tool.",
+    "resolution_time_minutes": 15,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "software installation",
+      "approved catalog",
+      "developer tools"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00126",
+    "created_at": "2025-11-07",
+    "source_channel": "Self-Service Portal",
+    "department": "Finance",
+    "requester_role": "Standard Employee",
+    "category": "Software",
+    "subcategory": "Software Installation Request",
+    "priority": "P3",
+    "subject": "Need PDF editing software for contract redlines",
+    "description": "I need a proper PDF editor to redline contracts, currently only have the free reader which can't edit.",
+    "resolution_steps": [
+      "Verified the requested tool was on the approved software list with an available license seat.",
+      "Installed the application and assigned a license seat.",
+      "Confirmed functionality with the requester."
+    ],
+    "resolution_summary": "Installed approved PDF editing tool and assigned license seat.",
+    "resolution_time_minutes": 20,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "software installation",
+      "pdf editor",
+      "license"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00127",
+    "created_at": "2025-11-16",
+    "source_channel": "Email",
+    "department": "Marketing",
+    "requester_role": "Standard Employee",
+    "category": "Software",
+    "subcategory": "Software Installation Request",
+    "priority": "P4",
+    "subject": "Requesting a design tool that isn't on the approved list",
+    "description": "I'd like to use a specific design tool I've used before, not sure if it's approved but wanted to ask.",
+    "resolution_steps": [
+      "Checked the approved software catalog; tool was not present.",
+      "Submitted the request to the software approval board for review as required for non-catalog software.",
+      "Advised requester that installation is pending approval board review."
+    ],
+    "resolution_summary": "Request forwarded to software approval board; installation pending review outcome.",
+    "resolution_time_minutes": 15,
+    "status": "Escalated_Pending",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Requested software is not on the approved catalog and requires software approval board review before installation.",
+    "csat_score": null,
+    "tags": [
+      "software installation",
+      "non-catalog",
+      "approval pending"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00128",
+    "created_at": "2025-11-17",
+    "source_channel": "Phone",
+    "department": "Operations",
+    "requester_role": "Manager",
+    "category": "Software",
+    "subcategory": "Software License Request",
+    "priority": "P2",
+    "subject": "Need 5 more licenses for the project management tool",
+    "description": "Our team is growing and we need five additional seats for the project management tool by next week for a new project kickoff.",
+    "resolution_steps": [
+      "Verified current seat usage against the department's licensed count.",
+      "Requested budget approval for the additional annual license cost as required above the spend threshold.",
+      "Approval received; five seats provisioned and assigned."
+    ],
+    "resolution_summary": "Additional seats provisioned after budget approval obtained per licensing policy.",
+    "resolution_time_minutes": 35,
+    "status": "Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Recurring software license purchases above the annual cost threshold require budget owner approval.",
+    "csat_score": 5,
+    "tags": [
+      "software license",
+      "seats",
+      "budget approval"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00129",
+    "created_at": "2025-11-18",
+    "source_channel": "Chat",
+    "department": "Sales",
+    "requester_role": "Standard Employee",
+    "category": "Software",
+    "subcategory": "Software License Request",
+    "priority": "P4",
+    "subject": "My license for the presentation tool expired",
+    "description": "Getting a message that my license expired for the presentation software, can someone renew it?",
+    "resolution_steps": [
+      "Confirmed license was part of the standard renewal cycle with available budget.",
+      "Renewed the license seat.",
+      "Confirmed application unlocked successfully."
+    ],
+    "resolution_summary": "License renewed as part of standard annual renewal, no additional approval needed.",
+    "resolution_time_minutes": 10,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "software license",
+      "renewal"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00130",
+    "created_at": "2025-11-19",
+    "source_channel": "Self-Service Portal",
+    "department": "Customer Support",
+    "requester_role": "Standard Employee",
+    "category": "Software",
+    "subcategory": "Application Crash/Error",
+    "priority": "P2",
+    "subject": "CRM keeps crashing when I open certain customer records",
+    "description": "Every time I open a specific type of customer record the CRM freezes and then closes completely. Happening several times a day.",
+    "resolution_steps": [
+      "Reviewed application logs and identified a known issue tied to a recent CRM update affecting large attachment records.",
+      "Applied a vendor-provided patch to the local installation.",
+      "Confirmed the crash no longer occurred on the same records."
+    ],
+    "resolution_summary": "Resolved by applying vendor patch addressing a known crash bug in the recent CRM update.",
+    "resolution_time_minutes": 40,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "application crash",
+      "crm",
+      "patch"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00131",
+    "created_at": "2025-11-20",
+    "source_channel": "Phone",
+    "department": "Finance",
+    "requester_role": "Standard Employee",
+    "category": "Software",
+    "subcategory": "Application Crash/Error",
+    "priority": "P3",
+    "subject": "Spreadsheet software freezes on large files",
+    "description": "Whenever I open our monthly reconciliation file the whole program freezes for a couple minutes.",
+    "resolution_steps": [
+      "Checked file size and complexity, confirmed it was near the recommended limit for the current software version.",
+      "Increased the application's memory allocation setting.",
+      "Confirmed improved performance on the same file."
+    ],
+    "resolution_summary": "Improved via increased memory allocation setting; recommended splitting the file long-term.",
+    "resolution_time_minutes": 30,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "application freeze",
+      "spreadsheet",
+      "performance"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00132",
+    "created_at": "2025-11-04",
+    "source_channel": "Chat",
+    "department": "Operations",
+    "requester_role": "Standard Employee",
+    "category": "Network & Connectivity",
+    "subcategory": "Wi-Fi Connectivity",
+    "priority": "P3",
+    "subject": "Wi-Fi keeps dropping every few minutes",
+    "description": "My laptop disconnects from the office Wi-Fi every few minutes, has to reconnect manually each time.",
+    "resolution_steps": [
+      "Checked for known access point issues in the requester's area; none reported.",
+      "Forgot and re-added the Wi-Fi network profile on the laptop.",
+      "Updated the wireless network adapter driver.",
+      "Confirmed stable connection for the remainder of the day."
+    ],
+    "resolution_summary": "Resolved via network profile reset and driver update.",
+    "resolution_time_minutes": 25,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "wifi",
+      "connectivity",
+      "driver"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00133",
+    "created_at": "2025-11-06",
+    "source_channel": "Self-Service Portal",
+    "department": "Marketing",
+    "requester_role": "Standard Employee",
+    "category": "Network & Connectivity",
+    "subcategory": "Wi-Fi Connectivity",
+    "priority": "P4",
+    "subject": "Can't connect to guest Wi-Fi for a visitor",
+    "description": "I have a visitor in a meeting and need a guest Wi-Fi code for them.",
+    "resolution_steps": [
+      "Generated a time-limited guest Wi-Fi access code per visitor policy.",
+      "Provided the code to the requester for the visitor."
+    ],
+    "resolution_summary": "Issued a standard time-limited guest access code.",
+    "resolution_time_minutes": 8,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "wifi",
+      "guest access",
+      "visitor"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00134",
+    "created_at": "2025-11-08",
+    "source_channel": "Email",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Network & Connectivity",
+    "subcategory": "Wi-Fi Connectivity",
+    "priority": "P3",
+    "subject": "Very weak Wi-Fi signal in the new meeting room",
+    "description": "The new meeting room on the east side of the building barely gets any Wi-Fi signal, calls keep dropping.",
+    "resolution_steps": [
+      "Confirmed signal strength was below acceptable threshold via a site survey.",
+      "Logged a facilities ticket to install an additional access point in that area.",
+      "Provided a temporary wired connection as a workaround."
+    ],
+    "resolution_summary": "Temporary wired workaround provided; permanent fix requires new access point installation by facilities.",
+    "resolution_time_minutes": 35,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 3,
+    "tags": [
+      "wifi",
+      "signal strength",
+      "meeting room",
+      "access point"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00135",
+    "created_at": "2025-11-09",
+    "source_channel": "Phone",
+    "department": "Sales",
+    "requester_role": "Standard Employee",
+    "category": "Network & Connectivity",
+    "subcategory": "VPN Connection Issues",
+    "priority": "P2",
+    "subject": "Can't connect to VPN while traveling",
+    "description": "I'm at a client site and the VPN client just spins and times out, I need access to internal pricing tools today.",
+    "resolution_steps": [
+      "Confirmed the client site's network was not blocking the required VPN port.",
+      "Had requester switch to the alternate VPN gateway used for travel scenarios.",
+      "Confirmed successful connection and access to internal tools."
+    ],
+    "resolution_summary": "Resolved by switching to alternate VPN gateway suited for external networks.",
+    "resolution_time_minutes": 22,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "vpn",
+      "travel",
+      "connectivity"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00136",
+    "created_at": "2025-11-10",
+    "source_channel": "Chat",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Network & Connectivity",
+    "subcategory": "VPN Connection Issues",
+    "priority": "P2",
+    "subject": "VPN connects but I can't reach internal repos",
+    "description": "VPN shows connected but I can't reach any internal git servers or internal tools, DNS seems broken.",
+    "resolution_steps": [
+      "Confirmed VPN tunnel was active but internal DNS resolution was failing.",
+      "Reset the VPN client's DNS configuration and reconnected.",
+      "Confirmed access restored to internal repositories."
+    ],
+    "resolution_summary": "Resolved via VPN DNS configuration reset.",
+    "resolution_time_minutes": 28,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "vpn",
+      "dns",
+      "internal tools"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00137",
+    "created_at": "2025-11-21",
+    "source_channel": "Email",
+    "department": "Finance",
+    "requester_role": "Director",
+    "category": "Network & Connectivity",
+    "subcategory": "VPN Connection Issues",
+    "priority": "P1",
+    "subject": "VPN completely down for our whole team during month-end close",
+    "description": "Our entire finance team can't connect to VPN today, and today is critical for month-end close, we need this fixed immediately.",
+    "resolution_steps": [
+      "Confirmed a wider VPN gateway outage affecting multiple users, not isolated to one account.",
+      "Escalated immediately as a suspected infrastructure incident given business-critical timing and multi-user impact.",
+      "Coordinated with network engineering on gateway restoration.",
+      "Notified affected team once service was restored."
+    ],
+    "resolution_summary": "Escalated as a P1 infrastructure incident due to multi-user impact during a business-critical period.",
+    "resolution_time_minutes": 75,
+    "status": "Escalated_Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Outage affecting multiple users combined with business-critical timing triggers mandatory escalation per SLA policy.",
+    "csat_score": 4,
+    "tags": [
+      "vpn",
+      "outage",
+      "p1",
+      "month-end",
+      "multi-user"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00138",
+    "created_at": "2025-11-12",
+    "source_channel": "Self-Service Portal",
+    "department": "Operations",
+    "requester_role": "Standard Employee",
+    "category": "Network & Connectivity",
+    "subcategory": "Slow Network / Drive Access",
+    "priority": "P3",
+    "subject": "Shared drive is extremely slow to open files",
+    "description": "Opening any file on the shared operations drive takes several minutes today, was fine yesterday.",
+    "resolution_steps": [
+      "Checked shared drive server load; confirmed a scheduled backup job was consuming bandwidth during business hours.",
+      "Adjusted the backup job schedule to run outside business hours going forward.",
+      "Confirmed drive performance returned to normal."
+    ],
+    "resolution_summary": "Resolved by rescheduling backup job outside business hours.",
+    "resolution_time_minutes": 30,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "shared drive",
+      "slow performance",
+      "backup job"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00139",
+    "created_at": "2025-11-13",
+    "source_channel": "Chat",
+    "department": "Legal",
+    "requester_role": "Standard Employee",
+    "category": "Network & Connectivity",
+    "subcategory": "Slow Network / Drive Access",
+    "priority": "P4",
+    "subject": "Can't access the legal shared folder anymore",
+    "description": "I used to have access to the legal shared folder and now it says access denied.",
+    "resolution_steps": [
+      "Checked access logs, confirmed a routine permissions cleanup had inadvertently removed the requester's group membership.",
+      "Re-added requester to the correct security group.",
+      "Confirmed access restored."
+    ],
+    "resolution_summary": "Resolved by restoring correct group membership after a permissions cleanup error.",
+    "resolution_time_minutes": 15,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "shared folder",
+      "access denied",
+      "permissions"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00140",
+    "created_at": "2025-11-05",
+    "source_channel": "Self-Service Portal",
+    "department": "Customer Support",
+    "requester_role": "Standard Employee",
+    "category": "Email & Communication",
+    "subcategory": "Outlook Issues",
+    "priority": "P3",
+    "subject": "Emails stuck in outbox, not sending",
+    "description": "I have four emails stuck in my outbox since this morning, they just won't send no matter what I do.",
+    "resolution_steps": [
+      "Checked mail client connection status; found it was in offline mode after a recent update.",
+      "Switched client back to online mode and forced a send/receive.",
+      "Confirmed all stuck emails were delivered successfully."
+    ],
+    "resolution_summary": "Resolved by restoring mail client to online mode.",
+    "resolution_time_minutes": 12,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "email",
+      "outlook",
+      "outbox",
+      "offline mode"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00141",
+    "created_at": "2025-11-11",
+    "source_channel": "Phone",
+    "department": "Marketing",
+    "requester_role": "Standard Employee",
+    "category": "Email & Communication",
+    "subcategory": "Outlook Issues",
+    "priority": "P4",
+    "subject": "Mailbox is full, can't receive new emails",
+    "description": "Getting bounce-back messages saying my mailbox is full, need more space or need to clean it up.",
+    "resolution_steps": [
+      "Reviewed mailbox size against standard quota.",
+      "Guided requester through archiving older folders to a local archive file.",
+      "Confirmed mailbox was back under quota and receiving mail normally."
+    ],
+    "resolution_summary": "Resolved via mailbox archiving; quota increase not required in this case.",
+    "resolution_time_minutes": 20,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "email",
+      "mailbox full",
+      "quota",
+      "archive"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00142",
+    "created_at": "2025-11-14",
+    "source_channel": "Chat",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Email & Communication",
+    "subcategory": "Outlook Issues",
+    "priority": "P3",
+    "subject": "Calendar invites not showing up for meetings",
+    "description": "Colleagues say they've sent me meeting invites but they never show up in my calendar.",
+    "resolution_steps": [
+      "Checked mail flow rules, found an inbox rule was inadvertently filtering calendar invites to a subfolder.",
+      "Corrected the inbox rule.",
+      "Confirmed new test invite appeared correctly in the primary calendar."
+    ],
+    "resolution_summary": "Resolved by correcting a misconfigured inbox rule affecting calendar invites.",
+    "resolution_time_minutes": 18,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "email",
+      "calendar",
+      "inbox rule"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00143",
+    "created_at": "2025-11-15",
+    "source_channel": "Email",
+    "department": "Operations",
+    "requester_role": "Manager",
+    "category": "Email & Communication",
+    "subcategory": "Distribution List / Calendar",
+    "priority": "P3",
+    "subject": "Need a new distribution list for the regional ops team",
+    "description": "We need a distribution list created for our regional operations team so we can send updates to everyone at once.",
+    "resolution_steps": [
+      "Verified requester had authority to request the list as team manager.",
+      "Created the distribution list with the specified members.",
+      "Confirmed test message reached all members."
+    ],
+    "resolution_summary": "Distribution list created and verified with a test message.",
+    "resolution_time_minutes": 25,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "distribution list",
+      "email group"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00144",
+    "created_at": "2025-11-17",
+    "source_channel": "Self-Service Portal",
+    "department": "Human Resources",
+    "requester_role": "Standard Employee",
+    "category": "Email & Communication",
+    "subcategory": "Distribution List / Calendar",
+    "priority": "P4",
+    "subject": "Need to be added to the company-wide events calendar",
+    "description": "Could someone give me edit access to the shared company events calendar? I help coordinate a few things.",
+    "resolution_steps": [
+      "Confirmed with the calendar owner that edit access was appropriate for the requester's role.",
+      "Granted edit permission on the shared calendar.",
+      "Confirmed requester could add a test event successfully."
+    ],
+    "resolution_summary": "Edit access granted to shared calendar after owner confirmation.",
+    "resolution_time_minutes": 12,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "calendar",
+      "shared calendar",
+      "permissions"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00145",
+    "created_at": "2025-11-16",
+    "source_channel": "Self-Service Portal",
+    "department": "Finance",
+    "requester_role": "Standard Employee",
+    "category": "Security",
+    "subcategory": "Phishing Report",
+    "priority": "P2",
+    "subject": "Suspicious email asking to update banking details",
+    "description": "Got an email that looks like it's from our bank asking me to click a link and update account details, seemed off so I didn't click.",
+    "resolution_steps": [
+      "Confirmed the email matched known phishing indicators (mismatched sender domain, urgency language).",
+      "Removed the message from the requester's mailbox and searched for the same message across other mailboxes.",
+      "Blocked the sending domain at the mail gateway.",
+      "Escalated to the security incident response process for review and audit logging, as required for all security-classified tickets.",
+      "Reminded requester this was the correct way to report suspicious emails."
+    ],
+    "resolution_summary": "Confirmed phishing attempt; removed from affected mailboxes and blocked sender domain.",
+    "resolution_time_minutes": 35,
+    "status": "Escalated_Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Every ticket in the Security category is escalated to a human agent per POL-005 Section 8; confirmed phishing attempts require security review and audit logging regardless of how quickly containment was completed.",
+    "csat_score": 5,
+    "tags": [
+      "phishing",
+      "security",
+      "email",
+      "security incident"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00146",
+    "created_at": "2025-11-18",
+    "source_channel": "Chat",
+    "department": "Sales",
+    "requester_role": "Standard Employee",
+    "category": "Security",
+    "subcategory": "Phishing Report",
+    "priority": "P2",
+    "subject": "I think I might have clicked a bad link",
+    "description": "I clicked a link in an email before realizing it looked suspicious, it took me to a login page that looked slightly off. I did not enter my password.",
+    "resolution_steps": [
+      "Treated as a potential compromise per security incident procedure given the link click.",
+      "Escalated immediately to the security response process for investigation, since any suspected compromise requires review beyond standard resolution.",
+      "Advised requester to change their password as a precaution while investigation proceeded."
+    ],
+    "resolution_summary": "Escalated for security review due to suspected phishing link interaction; precautionary password change advised.",
+    "resolution_time_minutes": 30,
+    "status": "Escalated_Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Any suspected account compromise or phishing link interaction is mandatorily escalated to the security incident process.",
+    "csat_score": null,
+    "tags": [
+      "phishing",
+      "suspected compromise",
+      "security incident"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00147",
+    "created_at": "2025-11-19",
+    "source_channel": "Email",
+    "department": "Marketing",
+    "requester_role": "Standard Employee",
+    "category": "Security",
+    "subcategory": "Phishing Report",
+    "priority": "P3",
+    "subject": "Reporting a spam email, not sure if it's dangerous",
+    "description": "Got an odd email advertising a prize, seems like spam more than a real threat but wanted to report it.",
+    "resolution_steps": [
+      "Reviewed email content; classified as low-risk marketing spam rather than a targeted phishing attempt.",
+      "Added sender to the spam filter block list.",
+      "Logged and routed to security for rolling review, as low-risk classification does not exempt the ticket from human review.",
+      "Confirmed with requester the email could be safely deleted."
+    ],
+    "resolution_summary": "Classified as low-risk spam; sender blocked, no further action needed.",
+    "resolution_time_minutes": 10,
+    "status": "Escalated_Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Security-category tickets are escalated to a human agent per POL-005 Section 8; even low-risk spam must be logged and reviewed by security rather than fully bypassing review.",
+    "csat_score": 4,
+    "tags": [
+      "spam",
+      "phishing report",
+      "low risk",
+      "security incident"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00148",
+    "created_at": "2025-11-20",
+    "source_channel": "Phone",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Security",
+    "subcategory": "Suspected Malware",
+    "priority": "P1",
+    "subject": "My laptop is acting really strange, popups everywhere",
+    "description": "Random popups keep appearing, browser homepage changed by itself, and the fan is running constantly even when idle.",
+    "resolution_steps": [
+      "Instructed requester to disconnect the laptop from the network immediately as a containment step.",
+      "Escalated immediately to the security incident response process given strong indicators of active malware.",
+      "Security team performed remote forensic scan and confirmed adware infection.",
+      "Reimaged the laptop and restored requester's files from the latest backup."
+    ],
+    "resolution_summary": "Escalated and handled as a confirmed malware incident; device contained, reimaged, and data restored from backup.",
+    "resolution_time_minutes": 120,
+    "status": "Escalated_Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Suspected active malware infection triggers mandatory immediate escalation to security incident response, regardless of confidence in a quick fix.",
+    "csat_score": null,
+    "tags": [
+      "malware",
+      "security incident",
+      "reimage",
+      "p1"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00149",
+    "created_at": "2025-11-21",
+    "source_channel": "Self-Service Portal",
+    "department": "Operations",
+    "requester_role": "Standard Employee",
+    "category": "Security",
+    "subcategory": "Suspected Malware",
+    "priority": "P2",
+    "subject": "Antivirus flagged a file I downloaded",
+    "description": "Downloaded an attachment from what I thought was a legitimate vendor email, antivirus popped up a warning right away.",
+    "resolution_steps": [
+      "Confirmed antivirus had already quarantined the file automatically before execution.",
+      "Escalated to security for confirmation the quarantine fully contained the threat.",
+      "Security confirmed no further spread; no reimage needed since file was blocked before running."
+    ],
+    "resolution_summary": "Escalated for security confirmation; antivirus successfully contained the threat before execution.",
+    "resolution_time_minutes": 30,
+    "status": "Escalated_Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Any antivirus detection is reviewed by the security team to confirm containment, per security incident policy.",
+    "csat_score": 5,
+    "tags": [
+      "malware",
+      "antivirus",
+      "quarantine"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00150",
+    "created_at": "2025-11-22",
+    "source_channel": "Phone",
+    "department": "Sales",
+    "requester_role": "Standard Employee",
+    "category": "Security",
+    "subcategory": "Lost/Stolen Device",
+    "priority": "P1",
+    "subject": "My work laptop was stolen from my car last night",
+    "description": "My laptop bag was stolen out of my car overnight, laptop, badge, and a notebook with some client notes were inside.",
+    "resolution_steps": [
+      "Immediately triggered remote lock and wipe capability on the device.",
+      "Escalated to security incident response given potential data exposure and physical theft.",
+      "Deactivated the requester's badge access immediately.",
+      "Coordinated with the requester on a police report for the incident record.",
+      "Issued a replacement laptop after the incident was logged."
+    ],
+    "resolution_summary": "Escalated and handled as a security incident; device remotely wiped, badge deactivated, replacement issued.",
+    "resolution_time_minutes": 90,
+    "status": "Escalated_Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Lost or stolen devices are mandatorily escalated to security incident response due to potential data exposure.",
+    "csat_score": null,
+    "tags": [
+      "lost device",
+      "stolen",
+      "security incident",
+      "remote wipe",
+      "p1"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00151",
+    "created_at": "2025-11-23",
+    "source_channel": "Chat",
+    "department": "Marketing",
+    "requester_role": "Standard Employee",
+    "category": "Security",
+    "subcategory": "Lost/Stolen Device",
+    "priority": "P2",
+    "subject": "Think I left my phone in a taxi",
+    "description": "I can't find my work phone, I think I left it in a taxi about an hour ago. It has company email on it.",
+    "resolution_steps": [
+      "Triggered remote wipe on the company mobile device management profile as a precaution.",
+      "Escalated to security given company email and data were present on the lost device.",
+      "Confirmed wipe completed successfully and device was removed from active inventory."
+    ],
+    "resolution_summary": "Escalated per lost-device policy; company data profile remotely wiped as a precaution.",
+    "resolution_time_minutes": 40,
+    "status": "Escalated_Resolved",
+    "was_escalated_to_human": true,
+    "escalation_reason": "Any lost device containing company data is escalated to security regardless of likelihood of recovery.",
+    "csat_score": null,
+    "tags": [
+      "lost device",
+      "mobile",
+      "remote wipe",
+      "security incident"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00152",
+    "created_at": "2025-11-06",
+    "source_channel": "Self-Service Portal",
+    "department": "Human Resources",
+    "requester_role": "Standard Employee",
+    "category": "Cloud & Collaboration Tools",
+    "subcategory": "SharePoint/OneDrive/Teams",
+    "priority": "P3",
+    "subject": "Can't access a shared SharePoint site anymore",
+    "description": "I could open our team's SharePoint site last week and now I get an access denied message.",
+    "resolution_steps": [
+      "Checked site permissions, found the requester's group had been removed during a routine access review.",
+      "Confirmed with the site owner that access should be restored.",
+      "Re-added requester's group to the site permissions."
+    ],
+    "resolution_summary": "Access restored after confirming with site owner; cause was a routine access review change.",
+    "resolution_time_minutes": 20,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 4,
+    "tags": [
+      "sharepoint",
+      "access denied",
+      "permissions"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00153",
+    "created_at": "2025-11-09",
+    "source_channel": "Chat",
+    "department": "Engineering",
+    "requester_role": "Standard Employee",
+    "category": "Cloud & Collaboration Tools",
+    "subcategory": "SharePoint/OneDrive/Teams",
+    "priority": "P4",
+    "subject": "OneDrive sync stuck at 'processing changes'",
+    "description": "My OneDrive has been stuck saying processing changes for over an hour, files aren't syncing.",
+    "resolution_steps": [
+      "Restarted the OneDrive sync client and cleared its local cache.",
+      "Confirmed sync resumed and completed for pending files."
+    ],
+    "resolution_summary": "Resolved by restarting sync client and clearing local cache.",
+    "resolution_time_minutes": 15,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "onedrive",
+      "sync",
+      "cache"
+    ]
+  },
+  {
+    "ticket_id": "TCK-2025-00154",
+    "created_at": "2025-11-15",
+    "source_channel": "Email",
+    "department": "Customer Support",
+    "requester_role": "Manager",
+    "category": "Cloud & Collaboration Tools",
+    "subcategory": "SharePoint/OneDrive/Teams",
+    "priority": "P3",
+    "subject": "Need a new Teams channel for a cross-department project",
+    "description": "Starting a new project with two other departments, need a Teams channel set up with the right people added.",
+    "resolution_steps": [
+      "Confirmed requester's authority to request the channel as project manager.",
+      "Created the Teams channel and added the specified cross-department members.",
+      "Confirmed all members could access the channel."
+    ],
+    "resolution_summary": "Teams channel created and populated with requested cross-department members.",
+    "resolution_time_minutes": 18,
+    "status": "Resolved",
+    "was_escalated_to_human": false,
+    "escalation_reason": null,
+    "csat_score": 5,
+    "tags": [
+      "teams",
+      "channel",
+      "collaboration"
+    ]
+  }
+]

@@ -1,0 +1,49 @@
+/* shared.css — design tokens e stili di base condivisi da index.html (utente)
+   e agent.html (operatore), così le due interfacce sembrano parte dello
+   stesso prodotto invece di due demo scollegate. */
+
+:root {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --border: #e4e2dd;
+  --text: #1c1b19;
+  --text-dim: #6b6862;
+  --ai: #3b4a6b;
+  --ai-bg: #eef1f7;
+  --review: #a8710a;
+  --review-bg: #fdf3e0;
+  --review-border: #e3ab3f;
+  --ok: #2f6b4f;
+  --ok-bg: #eaf3ee;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+.topnav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+}
+.topnav .brand {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.topnav .brand span { color: var(--text-dim); font-weight: 500; }
+.topnav a {
+  color: var(--text-dim);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+.topnav a:hover { color: var(--text); border-color: var(--text-dim); }

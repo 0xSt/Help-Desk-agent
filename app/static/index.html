@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Help Desk</title>
+<link rel="stylesheet" href="/static/shared.css" />
+<style>
+  main {
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 28px 20px 120px;
+  }
+  header { margin-bottom: 24px; }
+  header h1 { font-size: 19px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--text-dim); font-size: 13px; }
+  .thread-badge {
+    display: inline-block;
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 7px;
+  }
+  .thread-picker {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .thread-picker label { font-size: 12px; color: var(--text-dim); }
+  .thread-picker select {
+    font-family: var(--sans);
+    font-size: 12.5px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    max-width: 280px;
+  }
+  #log { display: flex; flex-direction: column; gap: 14px; }
+  .msg {
+    max-width: 88%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 14.5px;
+    line-height: 1.5;
+    animation: rise 0.18s ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) { .msg, .pending-card { animation: none; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .msg.user { align-self: flex-end; background: var(--text); color: #fff; border-bottom-right-radius: 3px; }
+  .msg.ai { align-self: flex-start; background: var(--ai-bg); color: var(--ai); border-bottom-left-radius: 3px; }
+  .msg.system { align-self: center; background: transparent; color: var(--text-dim); font-size: 12px; font-family: var(--mono); text-align: center; }
+  .msg .badge-human {
+    display: block;
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--ok);
+  }
+
+  /* Ticket in coda per un operatore: nessuna textarea qui, l'utente non
+     modifica nulla — può solo vedere che qualcuno se ne sta occupando. */
+  .pending-card {
+    align-self: flex-start;
+    max-width: 88%;
+    border: 1px solid var(--review-border);
+    background: var(--review-bg);
+    border-radius: 12px;
+    padding: 12px 16px;
+    animation: rise 0.18s ease-out;
+  }
+  .pending-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    color: #6b4d0f;
+    line-height: 1.5;
+  }
+  .pulse-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--review);
+    flex: none;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .pulse-dot { animation: none; } }
+
+  form#composer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; justify-content: center;
+    padding: 16px 20px;
+    background: linear-gradient(to top, var(--bg) 60%, transparent);
+  }
+  .composer-inner { width: 100%; max-width: 720px; display: flex; gap: 8px; }
+  #input {
+    flex: 1; padding: 11px 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface);
+    font-size: 14.5px; font-family: var(--sans);
+  }
+  #input:focus { outline: 2px solid var(--ai); outline-offset: 1px; }
+  #send {
+    padding: 0 18px; border-radius: 10px; border: none;
+    background: var(--text); color: #fff; font-weight: 600; font-size: 14px; cursor: pointer;
+  }
+  #send:disabled { opacity: 0.4; cursor: default; }
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <span class="brand">Help Desk</span>
+  <a href="/agent">Agent console →</a>
+</nav>
+<main>
+  <header>
+    <h1>IT Support</h1>
+    <p>Describe the issue you're running into. Try "I can't access the company VPN" to see escalation to an agent.</p>
+    <span class="thread-badge" id="threadBadge">ticket: —</span>
+    <div class="thread-picker">
+      <label for="threadSelect">Your conversations:</label>
+      <select id="threadSelect">
+        <option value="">— New conversation —</option>
+      </select>
+    </div>
+  </header>
+
+  <section id="log"></section>
+</main>
+
+<form id="composer">
+  <div class="composer-inner">
+    <input id="input" type="text" placeholder="Describe your issue…" autocomplete="off" />
+    <button id="send" type="submit">Send</button>
+  </div>
+</form>
+
+<script>
+  const log = document.getElementById('log');
+  const form = document.getElementById('composer');
+  const input = document.getElementById('input');
+  const sendBtn = document.getElementById('send');
+  const threadBadge = document.getElementById('threadBadge');
+  const threadSelect = document.getElementById('threadSelect');
+
+  let threadId = null;
+  let pollHandle = null;
+
+  function truncate(s, n) { return s.length > n ? s.slice(0, n) + '…' : s; }
+
+  // --- Selettore "le tue conversazioni" ---
+  // Nessuna nozione di identità utente in questo prototipo: la lista mostra
+  // TUTTE le conversazioni attive (non chiuse), non solo quelle "proprie".
+  async function refreshThreadList(selectId) {
+    try {
+      const res = await fetch('/api/threads');
+      const data = await res.json();
+      threadSelect.innerHTML = '<option value="">— New conversation —</option>';
+      data.threads.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.thread_id;
+        opt.textContent = t.thread_id.slice(0, 8) + ' · ' + truncate(t.subject, 36);
+        threadSelect.appendChild(opt);
+      });
+      threadSelect.value = selectId || '';
+    } catch (err) { /* la lista resta quella precedente */ }
+  }
+
+  threadSelect.addEventListener('change', () => {
+    stopPolling();
+    log.innerHTML = '';
+    const val = threadSelect.value;
+    if (!val) {
+      setThreadId(null);
+      setInputEnabled(true);
+      input.focus();
+    } else {
+      restoreThread(val);
+    }
+  });
+
+  function syncUrl(id) {
+    const url = new URL(window.location.href);
+    if (id) { url.searchParams.set('thread', id); } else { url.searchParams.delete('thread'); }
+    history.replaceState(null, '', url);
+  }
+
+  function setThreadId(id) {
+    threadId = id;
+    threadBadge.textContent = id ? ('ticket: ' + id.slice(0, 8)) : 'ticket: —';
+    syncUrl(id);
+  }
+
+  function addMsg(role, text, humanBadge) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.textContent = text;
+    if (humanBadge) {
+      const b = document.createElement('span');
+      b.className = 'badge-human';
+      b.textContent = '✓ verified by an agent';
+      div.appendChild(b);
+    }
+    log.appendChild(div);
+    window.scrollTo(0, document.body.scrollHeight);
+    return div;
+  }
+
+  function addPendingCard() {
+    const card = document.createElement('div');
+    card.className = 'pending-card';
+    card.innerHTML = `<div class="pending-label"><span class="pulse-dot"></span>Your ticket has been forwarded to an agent. We'll reply here as soon as possible.</div>`;
+    log.appendChild(card);
+    window.scrollTo(0, document.body.scrollHeight);
+    return card;
+  }
+
+  function setInputEnabled(enabled) {
+    input.disabled = !enabled;
+    sendBtn.disabled = !enabled;
+  }
+
+  // --- Polling mentre il ticket è in escalation ---
+  // Nessun editing qui: l'utente vede solo lo stato. Chi risolve il ticket
+  // è l'operatore, dalla console /agent, tramite POST /api/review.
+  function startPolling(id) {
+    stopPolling();
+    pollHandle = setInterval(async () => {
+      try {
+        const res = await fetch('/api/state/' + encodeURIComponent(id));
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === 'completed') {
+          stopPolling();
+          document.querySelectorAll('.pending-card').forEach(c => c.remove());
+          addMsg('ai', data.answer, data.reviewed_by_human);
+          setInputEnabled(true);
+          input.focus();
+        }
+      } catch (err) { /* riprova al prossimo giro */ }
+    }, 3000);
+  }
+  function stopPolling() {
+    if (pollHandle) { clearInterval(pollHandle); pollHandle = null; }
+  }
+
+  async function restoreThread(id) {
+    setInputEnabled(false);
+    try {
+      const res = await fetch('/api/state/' + encodeURIComponent(id));
+      if (!res.ok) {
+        syncUrl(null);
+        addMsg('system', 'Ticket not found: a new one will be created on your next message.');
+        setInputEnabled(true);
+        return;
+      }
+      const data = await res.json();
+      setThreadId(data.thread_id);
+      refreshThreadList(data.thread_id);
+      (data.history || []).forEach(turn => addMsg(turn.role === 'user' ? 'user' : 'ai', turn.content));
+
+      if (data.status === 'awaiting_review') {
+        addPendingCard();
+        startPolling(id);
+      } else {
+        setInputEnabled(true);
+        input.focus();
+      }
+    } catch (err) {
+      addMsg('system', 'Couldn\'t reach the server to restore the ticket.');
+      setInputEnabled(true);
+    }
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    addMsg('user', text);
+    input.value = '';
+    setInputEnabled(false);
+
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thread_id: threadId, message: text }),
+    });
+
+    if (!res.ok) {
+      // Es. 400: il thread è stato chiuso da un operatore nel frattempo.
+      const err = await res.json().catch(() => ({}));
+      addMsg('system', err.detail || 'Couldn\'t send the message.');
+      setThreadId(null);
+      refreshThreadList();
+      setInputEnabled(true);
+      return;
+    }
+
+    const data = await res.json();
+    setThreadId(data.thread_id);
+    refreshThreadList(data.thread_id);
+
+    if (data.status === 'awaiting_review') {
+      addPendingCard();
+      startPolling(threadId);
+    } else {
+      addMsg('ai', data.answer, data.reviewed_by_human);
+      setInputEnabled(true);
+      input.focus();
+    }
+  });
+
+  const initialThread = new URLSearchParams(window.location.search).get('thread');
+  refreshThreadList(initialThread);
+  if (initialThread) { restoreThread(initialThread); } else { input.focus(); }
+</script>
+</body>
+</html>

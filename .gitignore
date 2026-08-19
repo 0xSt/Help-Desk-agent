@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Segreti e configurazione locale
+.env
+
+# Indice Qdrant generato in locale (ricostruibile dai file in app/knowledge_base/)
+qdrant_data/
+
+# MLflow (introdotto in uno step successivo)
+mlruns/
+mlartifacts/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
