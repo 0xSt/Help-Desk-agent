@@ -41,6 +41,7 @@ from fastapi.responses import FileResponse
 from langgraph.types import Command
 
 from app.graph import graph
+from app.tracing import setup_tracing, log_run_configuration
 from app.store import ticket_store
 from app.threads import thread_registry
 from app.schemas import (
@@ -58,6 +59,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Help Desk — Demo HITL")
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    """
+    Inizializza il tracing MLflow all'avvio del processo.
+
+    Va fatto qui e non all'import dei moduli: in Docker Compose il container
+    del backend può partire prima che il servizio MLflow sia pronto ad
+    accettare connessioni, e l'evento di startup di FastAPI è il primo punto
+    in cui ha senso tentare. `setup_tracing()` degrada comunque senza
+    interrompere l'avvio se il servizio non risponde.
+    """
+    if setup_tracing():
+        log_run_configuration()
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -129,6 +145,7 @@ def chat(req: ChatRequest):
             review_reason=payload["reason"],
             confidence=payload.get("confidence"),
             history=result.get("history", []),
+            escalation_triggers=payload.get("triggers"),
         )
 
     return ChatResponse(
@@ -197,6 +214,7 @@ def get_state(thread_id: str):
             review_reason=payload["reason"],
             confidence=payload.get("confidence"),
             history=history,
+            escalation_triggers=payload.get("triggers"),
         )
 
     return ChatResponse(

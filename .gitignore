@@ -11,9 +11,10 @@ venv/
 # Indice Qdrant generato in locale (ricostruibile dai file in app/knowledge_base/)
 qdrant_data/
 
-# MLflow (introdotto in uno step successivo)
+# MLflow in locale: store, artifact e database di tracking
 mlruns/
 mlartifacts/
+mlflow.db
 
 # OS / editor
 .DS_Store

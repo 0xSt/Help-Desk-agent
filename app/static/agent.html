@@ -108,6 +108,20 @@
     margin-bottom: 8px;
   }
   .review-panel .reason { font-size: 13px; color: #6b4d0f; margin-bottom: 4px; }
+  .trigger-list {
+    list-style: none; margin: 0 0 10px; padding: 0;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .trigger-list li {
+    display: flex; gap: 8px; align-items: baseline;
+    font-size: 12.5px; color: #6b4d0f;
+  }
+  .trigger-code {
+    flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+    padding: 1px 6px; border-radius: 5px;
+    background: #fff; border: 1px solid var(--review-border);
+  }
+  .trigger-kind-mandatory .trigger-code { color: #b3392f; border-color: #b3392f; }
   .review-panel .confidence { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
   .review-panel textarea {
     width: 100%; min-height: 140px; resize: vertical;
@@ -244,6 +258,19 @@
     renderDetail(ticketId, data);
   }
 
+  // Elenco completo dei segnali che hanno causato l'escalation. Quelli
+  // "mandatory" derivano da regole di policy non aggirabili e sono
+  // evidenziati diversamente dai segnali di confidenza/retrieval.
+  function renderTriggers(triggers) {
+    if (!triggers || !triggers.length) return '';
+    const items = triggers.map(t => `
+      <li class="trigger-kind-${escapeHtml(t.kind)}">
+        <span class="trigger-code">${escapeHtml(t.code)}</span>
+        <span>${escapeHtml(t.description)}</span>
+      </li>`).join('');
+    return `<ul class="trigger-list">${items}</ul>`;
+  }
+
   function renderDetail(ticketId, data) {
     detail.innerHTML = '';
     delete detail.dataset.justResolved;
@@ -286,6 +313,7 @@
     panel.innerHTML = `
       <div class="label">AI-generated draft — requires your review</div>
       <div class="reason">${escapeHtml(data.review_reason || 'No reason specified.')}</div>
+      ${renderTriggers(data.escalation_triggers)}
       <div class="confidence">model confidence: ${data.confidence != null ? data.confidence.toFixed(2) : 'n/a'}</div>
       <textarea id="answerBox">${escapeHtml(data.draft_answer)}</textarea>
       <div class="actions">

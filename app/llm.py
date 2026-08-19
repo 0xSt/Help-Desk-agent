@@ -1,75 +1,211 @@
 """
 llm.py
 ======
-Wrapper attorno al modello linguistico (Claude via API Anthropic), con la
-persona dell'assistente di help desk IT (azienda informatica fittizia, senza
-nome). Se la variabile d'ambiente ANTHROPIC_API_KEY non è impostata, il modulo entra
-automaticamente in "modalità mock": produce risposte finte ma coerenti, utile
-per provare l'intero flusso (incluso l'interrupt/resume di LangGraph) senza
-possedere una chiave API.
+Wrapper attorno al modello linguistico (**Google Gemini**, via SDK
+`google-genai`), con la persona dell'assistente di help desk IT di
+un'azienda informatica fittizia (scenario del progetto, azienda senza nome).
+
+Due cambiamenti importanti rispetto alla versione precedente:
+
+1. **Structured output nativo.** Prima chiedevamo al modello "rispondi solo
+   con JSON" e facevamo `json.loads` sperando bene. Gemini accetta uno schema
+   Pydantic in `response_schema` e garantisce una risposta conforme: il
+   parsing non è più un punto di rottura.
+
+2. **Il modello non decide più l'escalation, la osserva.** Oltre alla bozza e
+   alla confidenza, restituisce un insieme di **segnali** strutturati sul
+   ticket (categoria, priorità, presenza di approvazioni, impatto multi-utente,
+   richiesta esplicita di un umano...). La decisione vera e propria è presa in
+   `app/escalation.py` da codice deterministico e verificabile. Separare
+   "capire il testo" (compito del modello) da "decidere" (compito di regole
+   ispezionabili) rende la decisione spiegabile e testabile — requisito
+   sostanziale, dato che POL-006 §3 impone certe escalation *a prescindere*
+   dal giudizio del modello.
+
+Senza `GEMINI_API_KEY` il modulo entra in **modalità mock**: produce risposte e
+segnali finti ma coerenti, così l'intero flusso (incluso interrupt/resume di
+LangGraph) resta provabile senza credenziali e senza costi.
 """
-import os
-import json
 import logging
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, Field
+
+from app import config
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "claude-sonnet-4-6"
-
-# Argomenti che richiedono SEMPRE un'escalation a un operatore umano,
-# indipendentemente dalla confidenza dichiarata dal modello. È un controllo
-# deterministico che integra l'auto-valutazione dell'LLM: in un help desk IT
-# reale non ci si fida solo del giudizio del modello su se stesso per
-# richieste che toccano sicurezza, accessi o dati sensibili.
-#
-# NOTA: questa è ancora la logica di escalation "semplice" del prototipo
-# iniziale. Sarà riprogettata in uno step successivo (vedi graph.py).
-# Le parole chiave sono in inglese: knowledge base e utenti parlano inglese.
-MANDATORY_REVIEW_KEYWORDS = [
-    "admin password", "vpn", "delete account",
-    "sensitive data", "breach", "root access", "admin credentials",
-    "software license", "unauthorized access",
+# Categorie ammesse: sono esattamente quelle presenti nello storico ticket,
+# così la classificazione del modello è confrontabile con la ground truth.
+TicketCategory = Literal[
+    "Account & Access Management",
+    "Hardware",
+    "Network & Connectivity",
+    "Software",
+    "Security",
+    "Email & Communication",
+    "Cloud & Collaboration Tools",
 ]
 
+
+class TicketSignals(BaseModel):
+    """
+    Osservazioni strutturate sul ticket, estratte dal modello.
+
+    Non sono decisioni: sono i fatti su cui `app/escalation.py` applicherà le
+    regole di POL-006 §3. Ogni campo booleano corrisponde a una condizione
+    citata testualmente da una policy, in modo che la regola derivata sia
+    tracciabile fino alla sua fonte.
+    """
+    category: TicketCategory = Field(description="Ticket category.")
+    subcategory: str = Field(description="Short free-text subcategory, e.g. 'Password Reset'.")
+    priority: Literal["P1", "P2", "P3", "P4"] = Field(
+        description="Priority per POL-006 Section 2 definitions."
+    )
+    involuntary_termination: bool = Field(
+        description="True if the request concerns offboarding tied to an involuntary termination or dismissal."
+    )
+    sensitive_system_access: bool = Field(
+        description=(
+            "True if the request asks for access to a system classified as sensitive in POL-002 Section 4: "
+            "financial reporting, HR information systems, production infrastructure or databases, legal case "
+            "management, or any system storing customer payment information."
+        )
+    )
+    approvals_documented: bool = Field(
+        description=(
+            "True only if the request explicitly states that ALL required approvals are already in place. "
+            "False if approvals are missing, partial, or simply not mentioned."
+        )
+    )
+    exceeds_spend_threshold: bool = Field(
+        description=(
+            "True if the request involves hardware, software or licence spend beyond a standard allowance: "
+            "premium or non-standard equipment, replacing a device still under the 4-year refresh cycle, "
+            "or buying additional licence seats beyond the existing budget."
+        )
+    )
+    non_catalog_software: bool = Field(
+        description="True if the request asks to install software that is not on the approved software catalog."
+    )
+    explicit_human_request: bool = Field(
+        description=(
+            "True if the requester asks to speak to a human agent, says automated help is not working, "
+            "or rejects an AI-provided resolution."
+        )
+    )
+    multi_user_impact: bool = Field(
+        description=(
+            "True if the report suggests more than one user or a shared piece of infrastructure is affected "
+            "(a whole team or department, a gateway, a server)."
+        )
+    )
+    asks_to_bypass_approval: bool = Field(
+        description="True if the requester asks to skip, bypass or speed past an approval requirement."
+    )
+    out_of_scope_domain: Literal["none", "hr", "legal"] = Field(
+        description=(
+            "Per POL-008 Section 3: 'hr' for complaints about a colleague's conduct, harassment reports, "
+            "workplace disputes, payroll, benefits or requests for another employee's personal data; "
+            "'legal' for legal holds, litigation or contract disputes; 'none' otherwise."
+        )
+    )
+
+
+class DraftAnswer(BaseModel):
+    """Risposta completa attesa dal modello per un turno."""
+    answer: str = Field(description="The reply to send to the user, in English.")
+    confidence: float = Field(
+        ge=0.0, le=1.0,
+        description=(
+            "How confident you are that the answer is correct, complete and safe to send without human "
+            "review. Use a low value if the request is ambiguous, if the retrieved context does not clearly "
+            "cover the scenario, or if the guidance you found is contradictory."
+        ),
+    )
+    signals: TicketSignals
+
+
 SYSTEM_PROMPT = """You are the IT help desk assistant for a technology company.
-Respond to technical support requests from users (employees or contractors)
-clearly and professionally, in English.
+You answer technical support requests from employees and contractors clearly
+and professionally, in English.
 
-ALWAYS respond with ONLY a valid JSON object, no extra text, markdown, or
-backticks, with exactly this structure:
-{"answer": "<your answer in English>", "confidence": <number between 0 and 1>}
+You are given excerpts from two internal knowledge bases: the company's IT
+policies, and past tickets with how they were resolved. Ground your answer in
+that context. If the context does not cover the situation, say so plainly
+rather than inventing company procedure — a human agent will review your draft.
 
-"confidence" should reflect how sure you are that the answer is correct,
-complete, and safe to send directly to the user without human review. Use a
-low value (below 0.7) if the request is ambiguous, involves a specific
-configuration you don't know with certainty, or touches on
-security/access/sensitive data."""
+Alongside your answer you must report structured observations about the
+request. Those observations are used by a separate rule engine to decide
+whether the ticket needs a human agent, so report what the request actually
+says. Do not soften an observation because you believe you can handle the
+ticket yourself, and do not decide the escalation yourself.
+
+Set 'approvals_documented' to true only when the request states that the
+required approvals are already in place; absence of any mention means false."""
 
 
-def needs_mandatory_review(query: str) -> bool:
-    """Controllo deterministico e trasparente: alcuni argomenti vanno sempre in escalation."""
+def _keyword_signals(query: str) -> TicketSignals:
+    """
+    Segnali finti per la modalità mock, derivati da parole chiave.
+
+    Serve solo a rendere il sistema provabile end-to-end senza API key: è una
+    caricatura grossolana della comprensione del testo, non un classificatore.
+    """
     q = query.lower()
-    return any(kw in q for kw in MANDATORY_REVIEW_KEYWORDS)
+
+    def any_of(*words: str) -> bool:
+        return any(w in q for w in words)
+
+    if any_of("phishing", "malware", "ransom", "stolen", "lost my", "suspicious email", "virus"):
+        category: Any = "Security"
+    elif any_of("vpn", "wi-fi", "wifi", "network", "shared drive"):
+        category = "Network & Connectivity"
+    elif any_of("password", "mfa", "locked", "account", "access to"):
+        category = "Account & Access Management"
+    elif any_of("laptop", "printer", "monitor", "keyboard", "mouse", "dock"):
+        category = "Hardware"
+    elif any_of("install", "licence", "license", "software", "crash"):
+        category = "Software"
+    elif any_of("email", "mailbox", "calendar", "distribution list"):
+        category = "Email & Communication"
+    else:
+        category = "Cloud & Collaboration Tools"
+
+    return TicketSignals(
+        category=category,
+        subcategory="mock",
+        priority="P2" if category == "Security" else "P3",
+        involuntary_termination=any_of("dismiss", "terminated", "fired", "involuntary"),
+        sensitive_system_access=any_of("financial", "payment", "hr system", "production database"),
+        approvals_documented=any_of("approved by", "approval attached", "signed off"),
+        exceeds_spend_threshold=any_of("new laptop", "workstation", "more seats", "additional licence"),
+        non_catalog_software=any_of("not on the catalog", "not in the catalog", "not approved"),
+        explicit_human_request=any_of("speak to a human", "talk to a person", "real person", "human agent"),
+        multi_user_impact=any_of("whole team", "everyone", "all of us", "entire department", "outage"),
+        asks_to_bypass_approval=any_of("skip the approval", "bypass", "without approval"),
+        out_of_scope_domain="hr" if any_of("harass", "bully", "payroll", "salary") else "none",
+    )
 
 
-def _mock_answer(query: str) -> Dict:
-    """Risposta finta usata quando manca ANTHROPIC_API_KEY, per demo/test offline."""
-    logger.warning("ANTHROPIC_API_KEY non impostata: uso la modalità mock.")
-    low_conf = needs_mandatory_review(query) or len(query.strip()) < 15
-    return {
-        "answer": f"[MOCK] Help desk response generated for: '{query}'",
-        "confidence": 0.4 if low_conf else 0.9,
-    }
+def _mock_answer(query: str) -> DraftAnswer:
+    logger.warning("GEMINI_API_KEY non impostata: uso la modalità mock.")
+    signals = _keyword_signals(query)
+    low_conf = signals.category == "Security" or len(query.strip()) < 15
+    return DraftAnswer(
+        answer=f"[MOCK] Help desk response generated for: '{query}'",
+        confidence=0.4 if low_conf else 0.9,
+        signals=signals,
+    )
 
 
-def _format_kb_context(kb_docs_context: List[Dict[str, Any]], kb_tickets_context: List[Dict[str, Any]]) -> str:
+def _format_kb_context(
+    kb_docs_context: List[Dict[str, Any]],
+    kb_tickets_context: List[Dict[str, Any]],
+) -> str:
     """
     Costruisce il blocco di contesto RAG da iniettare nel prompt, a partire
-    dai risultati reali dei due nodi di retrieval in graph.py (vedi
-    app/retrieval.py). Ogni elemento atteso è un dict con almeno le chiavi
-    {"text": ..., "source": ...}. Le etichette delle sezioni sono in inglese
-    perché finiscono nel prompt mandato al modello, che risponde in inglese.
+    dai risultati dei due nodi di retrieval in graph.py.
     """
     sections = []
     if kb_docs_context:
@@ -81,53 +217,79 @@ def _format_kb_context(kb_docs_context: List[Dict[str, Any]], kb_tickets_context
     return "\n\n".join(sections)
 
 
+def _build_contents(query: str, history: List[Dict[str, str]], kb_context: str) -> List[Any]:
+    """
+    Traduce la cronologia nel formato `contents` di Gemini.
+
+    Nota sui ruoli: Gemini usa "model" dove noi (e Anthropic) usiamo
+    "assistant"; la conversione va fatta qui.
+    """
+    from google.genai import types
+
+    contents = []
+    for turn in history:
+        role = "model" if turn["role"] == "assistant" else "user"
+        contents.append(types.Content(role=role, parts=[types.Part(text=turn["content"])]))
+
+    user_text = f"{kb_context}\n\n---\n\nTicket from the user:\n{query}" if kb_context else query
+    contents.append(types.Content(role="user", parts=[types.Part(text=user_text)]))
+    return contents
+
+
 def generate_draft_answer(
     query: str,
     history: List[Dict[str, str]],
     kb_docs_context: Optional[List[Dict[str, Any]]] = None,
     kb_tickets_context: Optional[List[Dict[str, Any]]] = None,
-) -> Dict:
+) -> DraftAnswer:
     """
-    Genera una bozza di risposta più un'auto-valutazione di confidenza (0-1).
+    Genera bozza di risposta, auto-valutazione di confidenza e segnali sul
+    ticket, in una sola chiamata al modello.
 
-    `kb_docs_context` e `kb_tickets_context` sono il contesto recuperato dai
-    due nodi di retrieval in graph.py (vedi app/retrieval.py) — passaggi di
-    policy e ticket storici simili, già pronti per essere iniettati nel prompt.
+    Una sola chiamata invece di due (una per rispondere, una per classificare)
+    perché il contesto da mandare è lo stesso e raddoppiare le chiamate
+    raddoppierebbe latenza e costo. Il compromesso: la classificazione
+    condivide il contesto della generazione, quindi non è del tutto
+    indipendente da essa — da rivedere se in evaluation la classificazione
+    risultasse poco affidabile.
 
-    Ritorna sempre un dict {"answer": str, "confidence": float}, così che
-    graph.py non debba mai gestire eccezioni provenienti da qui.
+    Ritorna sempre un `DraftAnswer` valido: gli errori vengono trasformati in
+    una risposta prudente a confidenza 0.0, mai propagati al grafo.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+    if not config.GEMINI_API_KEY:
         return _mock_answer(query)
 
     kb_context = _format_kb_context(kb_docs_context or [], kb_tickets_context or [])
-    user_content = f"{kb_context}\n\n---\n\n{query}" if kb_context else query
 
     try:
-        import anthropic
+        from google import genai
+        from google.genai import types
 
-        client = anthropic.Anthropic(api_key=api_key)
-        messages = [{"role": m["role"], "content": m["content"]} for m in history]
-        messages.append({"role": "user", "content": user_content})
-
-        response = client.messages.create(
-            model=MODEL_NAME,
-            max_tokens=1024,
-            system=SYSTEM_PROMPT,
-            messages=messages,
+        client = genai.Client(api_key=config.GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model=config.GEMINI_MODEL,
+            contents=_build_contents(query, history, kb_context),
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=DraftAnswer,
+                # Nessun `temperature`/`top_p`/`top_k`: i parametri di
+                # sampling sono deprecati sui modelli Gemini 3.x.
+            ),
         )
-        raw_text = response.content[0].text
-        parsed = json.loads(raw_text)
-        return {
-            "answer": str(parsed["answer"]),
-            "confidence": float(parsed["confidence"]),
-        }
+        # `parsed` è già l'oggetto Pydantic quando si passa response_schema;
+        # il fallback su .text copre le versioni di SDK che non lo popolano.
+        parsed = getattr(response, "parsed", None)
+        if isinstance(parsed, DraftAnswer):
+            return parsed
+        return DraftAnswer.model_validate_json(response.text)
+
     except Exception:
-        logger.exception("Errore nella chiamata a Claude: uso una risposta di fallback prudente.")
+        logger.exception("Errore nella chiamata a Gemini: uso una risposta di fallback prudente.")
         # Confidenza 0.0 forza sempre l'escalation: fallire in modo sicuro,
-        # non lasciare mai passare un errore silenziosamente come se fosse una risposta valida.
-        return {
-            "answer": "I wasn't able to generate a reliable answer for this request.",
-            "confidence": 0.0,
-        }
+        # non lasciare mai passare un errore come se fosse una risposta valida.
+        return DraftAnswer(
+            answer="I wasn't able to generate a reliable answer for this request.",
+            confidence=0.0,
+            signals=_keyword_signals(query),
+        )

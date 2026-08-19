@@ -26,6 +26,10 @@ class ChatResponse(BaseModel):
     confidence: Optional[float] = None
     history: Optional[List[Dict[str, str]]] = None  # turni precedenti già conclusi, per ricostruire la UI dopo un refresh
     reviewed_by_human: Optional[bool] = None  # True se 'answer' è stato validato/scritto da un operatore
+    # Elenco completo dei trigger che hanno causato l'escalation, ciascuno con
+    # la clausola di policy che lo giustifica. L'operatore vede così *tutti* i
+    # motivi, non solo il primo riassunto in `review_reason`.
+    escalation_triggers: Optional[List[Dict[str, str]]] = None
 
 
 class TicketSummary(BaseModel):

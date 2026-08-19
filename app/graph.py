@@ -1,28 +1,29 @@
 """
 graph.py
 ========
-Definisce il workflow LangGraph dell'help desk, con:
+Definisce il workflow LangGraph dell'help desk:
 
 - due nodi di retrieval che recuperano contesto da due knowledge base
-  distinte (policy IT e storico ticket risolti) prima di generare la
-  risposta;
-- un nodo human-in-the-loop (HITL) per l'escalation a un operatore umano.
+  distinte (policy IT e storico ticket risolti);
+- un nodo che genera la bozza e osserva il ticket (`agent`);
+- un nodo che decide l'escalation con logica multisegnale (`decide_escalation`);
+- un nodo human-in-the-loop per l'escalation vera e propria (`human_review`).
 
 Flusso del grafo:
 
-               ┌──────────────────┐
-        ┌─────▶│ retrieve_kb_docs  │────┐
-        │      └──────────────────┘    │
-    START                               ▼
-        │      ┌─────────────────────┐ ┌────────┐   needs_review=False   ┌──────────┐
-        └─────▶│ retrieve_kb_tickets │▶│ agent  │────────────────────────▶ finalize │──▶ END
-               └─────────────────────┘ └────────┘                       └──────────┘
-                                            │ needs_review=True                ▲
-                                            ▼                                  │
-                                     ┌────────────────┐                       │
-                                     │ human_review    │───────────────────────┘
-                                     │ (interrupt())   │
-                                     └────────────────┘
+           ┌──────────────────┐
+    ┌─────▶│ retrieve_kb_docs  │────┐
+    │      └──────────────────┘    │
+  START                             ▼           escalate=False
+    │      ┌─────────────────────┐ ┌───────┐   ┌──────────────────┐   ┌──────────┐
+    └─────▶│ retrieve_kb_tickets │▶│ agent │──▶│ decide_escalation │──▶│ finalize │──▶ END
+           └─────────────────────┘ └───────┘   └──────────────────┘   └──────────┘
+                                                      │ escalate=True      ▲
+                                                      ▼                    │
+                                               ┌────────────────┐          │
+                                               │ human_review    │─────────┘
+                                               │ (interrupt())   │
+                                               └────────────────┘
 
 I due nodi di retrieval partono in parallelo da START (fan-out) e convergono
 entrambi su `agent` (fan-in): LangGraph esegue `agent` solo dopo che ENTRAMBI
@@ -30,10 +31,12 @@ hanno prodotto il loro output nello stesso super-step, perché ciascuno scrive
 su una chiave di stato diversa (`kb_docs_context` / `kb_tickets_context`) e
 quindi non c'è conflitto di scrittura da risolvere.
 
-Il retrieval vero e proprio (embedding, similarità, query su Qdrant) vive in
-app/retrieval.py — qui i due nodi si limitano a invocarlo e a incapsulare
-eventuali errori, così un problema di retrieval non fa mai fallire l'intero
-turno di conversazione (stesso principio di robustezza già usato in llm.py).
+**Perché generazione e decisione sono due nodi distinti.** `agent` produce
+bozza, confidenza e segnali; `decide_escalation` applica su quei segnali le
+regole di policy. Tenerli separati serve a tre cose concrete: la decisione
+diventa misurabile in isolamento nell'evaluation, le sue soglie diventano
+iperparametri variabili tra un run e l'altro, e nel tracing MLflow appare
+come uno span dedicato con i propri input e output.
 """
 import logging
 from typing import TypedDict, Optional, List, Dict, Any
@@ -42,7 +45,8 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import interrupt
 
-from app.llm import generate_draft_answer, needs_mandatory_review
+from app import config, escalation
+from app.llm import generate_draft_answer
 from app.retrieval import search_kb_docs, search_kb_tickets
 
 logger = logging.getLogger(__name__)
@@ -56,8 +60,10 @@ class AgentState(TypedDict):
     kb_tickets_context: List[Dict[str, Any]]  # ticket storici simili recuperati da kb_tickets (Qdrant)
     draft_answer: str                         # bozza generata dal nodo agent
     confidence: float                         # confidenza auto-dichiarata dal modello (0-1)
+    signals: Dict[str, Any]                   # osservazioni strutturate sul ticket (vedi llm.TicketSignals)
     needs_review: bool                        # True -> il grafo passa dal nodo human_review (escalation)
-    review_reason: Optional[str]              # motivo mostrato all'operatore
+    review_reason: Optional[str]              # motivo sintetico mostrato all'operatore
+    escalation_triggers: List[Dict[str, str]] # elenco completo dei trigger scattati, con clausola di policy
     final_answer: Optional[str]               # risposta definitiva (AI o corretta da operatore)
     reviewed_by_human: bool                   # traccia se questa risposta è passata da un operatore
 
@@ -69,7 +75,7 @@ def retrieve_kb_docs_node(state: AgentState) -> Dict[str, Any]:
     dell'utente — sono il contesto che aiuta l'agente a rispondere in modo
     coerente con le procedure aziendali reali invece di inventare la prassi.
     """
-    results = search_kb_docs(state["user_query"], k=3)
+    results = search_kb_docs(state["user_query"], k=config.RETRIEVAL_TOP_K)
     logger.info("retrieve_kb_docs_node -> %d passaggi recuperati", len(results))
     return {"kb_docs_context": results}
 
@@ -80,48 +86,73 @@ def retrieve_kb_tickets_node(state: AgentState) -> Dict[str, Any]:
     (con relativa risoluzione, categoria ed esito di escalation) da usare
     come precedente concreto nella risposta.
     """
-    results = search_kb_tickets(state["user_query"], k=3)
+    results = search_kb_tickets(state["user_query"], k=config.RETRIEVAL_TOP_K)
     logger.info("retrieve_kb_tickets_node -> %d ticket simili recuperati", len(results))
     return {"kb_tickets_context": results}
 
 
 def agent_node(state: AgentState) -> Dict[str, Any]:
-    """Nodo 'agente AI': genera la bozza e decide se è necessaria l'escalation."""
-    query = state["user_query"]
+    """
+    Nodo 'agente AI': genera la bozza di risposta e le osservazioni sul ticket.
+
+    NON decide l'escalation: quella spetta a `decide_escalation_node`. La
+    separazione è deliberata — il modello interpreta il testo, le regole di
+    policy le applica codice deterministico e ispezionabile (vedi il docstring
+    di app/escalation.py).
+    """
     result = generate_draft_answer(
-        query,
+        state["user_query"],
         state.get("history", []),
         kb_docs_context=state.get("kb_docs_context", []),
         kb_tickets_context=state.get("kb_tickets_context", []),
     )
 
-    # NOTA: la logica di escalation è ancora quella "semplice" (regola su
-    # parole chiave + soglia di confidenza). Verrà rivista in uno step
-    # successivo, probabilmente incorporando anche segnali dal retrieval
-    # (es. "nessun passaggio rilevante trovato" -> escalation forzata).
-    mandatory = needs_mandatory_review(query)
-    low_confidence = result["confidence"] < 0.7
-    needs_review = mandatory or low_confidence
-
-    reason = None
-    if mandatory:
-        reason = "This request involves security or account access and always requires human review."
-    elif low_confidence:
-        reason = f"The model reported low confidence ({result['confidence']:.2f})."
-
-    logger.info("agent_node -> needs_review=%s (%s)", needs_review, reason)
+    logger.info(
+        "agent_node -> categoria=%s priorità=%s confidenza=%.2f",
+        result.signals.category, result.signals.priority, result.confidence,
+    )
 
     return {
-        "draft_answer": result["answer"],
-        "confidence": result["confidence"],
-        "needs_review": needs_review,
-        "review_reason": reason,
+        "draft_answer": result.answer,
+        "confidence": result.confidence,
+        "signals": result.signals.model_dump(),
+        # Reset esplicito: in un turno successivo sullo stesso thread questi
+        # campi porterebbero altrimenti i valori del turno precedente.
         "final_answer": None,
+        "reviewed_by_human": False,
     }
 
 
-def route_after_agent(state: AgentState) -> str:
-    """Edge condizionale: instrada verso l'escalation umana o direttamente alla finalizzazione."""
+def decide_escalation_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Applica la logica multisegnale di escalation (app/escalation.py) ai
+    segnali del modello, alla sua confidenza e agli esiti del retrieval.
+
+    È un nodo a sé, e non poche righe dentro `agent_node`, per tre motivi:
+    - è la parte che l'evaluation dovrà misurare in isolamento;
+    - le sue soglie sono iperparametri da far variare tra un run e l'altro;
+    - nel tracing MLflow diventa uno span separato, con i propri input/output,
+      così si vede quale segnale ha determinato l'esito di quel ticket.
+    """
+    from app.llm import TicketSignals
+
+    signals = TicketSignals.model_validate(state["signals"])
+    decision = escalation.decide(
+        signals=signals,
+        confidence=state["confidence"],
+        kb_docs=state.get("kb_docs_context", []),
+        kb_tickets=state.get("kb_tickets_context", []),
+    )
+
+    return {
+        "needs_review": decision.escalate,
+        "review_reason": decision.reason,
+        "escalation_triggers": decision.as_payload(),
+    }
+
+
+def route_after_decision(state: AgentState) -> str:
+    """Edge condizionale: instrada verso l'operatore umano o alla finalizzazione."""
     return "human_review" if state["needs_review"] else "finalize"
 
 
@@ -139,6 +170,10 @@ def human_review_node(state: AgentState) -> Dict[str, Any]:
         "draft_answer": state["draft_answer"],
         "reason": state["review_reason"],
         "confidence": state["confidence"],
+        # L'elenco completo dei trigger accompagna il ticket fino alla console
+        # operatore: POL-006 §5.2 chiede che al ticket escalato sia allegato
+        # il contesto completo, incluso il motivo specifico dell'escalation.
+        "triggers": state.get("escalation_triggers", []),
     })
     return {"final_answer": corrected_answer, "reviewed_by_human": True}
 
@@ -167,6 +202,7 @@ def build_graph():
     builder.add_node("retrieve_kb_docs", retrieve_kb_docs_node)
     builder.add_node("retrieve_kb_tickets", retrieve_kb_tickets_node)
     builder.add_node("agent", agent_node)
+    builder.add_node("decide_escalation", decide_escalation_node)
     builder.add_node("human_review", human_review_node)
     builder.add_node("finalize", finalize_node)
 
@@ -177,9 +213,10 @@ def build_graph():
     builder.add_edge("retrieve_kb_docs", "agent")
     builder.add_edge("retrieve_kb_tickets", "agent")
 
+    builder.add_edge("agent", "decide_escalation")
     builder.add_conditional_edges(
-        "agent",
-        route_after_agent,
+        "decide_escalation",
+        route_after_decision,
         {"human_review": "human_review", "finalize": "finalize"},
     )
     builder.add_edge("human_review", "finalize")

@@ -34,8 +34,8 @@ uvicorn app.main:app --reload
 - `http://localhost:8000/` — interfaccia **utente**: apre un ticket.
 - `http://localhost:8000/agent` — interfaccia **operatore**: coda ticket in escalation.
 
-Funziona subito senza chiave API (modalità mock). Per usare Claude davvero,
-copia `.env.example` in `.env` e imposta `ANTHROPIC_API_KEY`.
+Funziona subito senza chiave API (modalità mock). Per usare Gemini davvero,
+copia `.env.example` in `.env` e imposta `GEMINI_API_KEY`.
 
 Prova questo scenario end-to-end:
 1. Da `/`, scrivi "I can't access the company VPN" → il ticket va in escalation, l'utente vede un messaggio di attesa (senza poter modificare nulla).
@@ -46,33 +46,124 @@ Prova questo scenario end-to-end:
 ## Architettura del grafo
 
 ```
-               ┌──────────────────┐
-        ┌─────▶│ retrieve_kb_docs  │────┐
-        │      └──────────────────┘    │
-    START                               ▼
-        │      ┌─────────────────────┐ ┌────────┐   needs_review=False   ┌──────────┐
-        └─────▶│ retrieve_kb_tickets │▶│ agent  │────────────────────────▶ finalize │──▶ END
-               └─────────────────────┘ └────────┘                       └──────────┘
-                                            │ needs_review=True                ▲
-                                            ▼                                  │
-                                     ┌────────────────┐                       │
-                                     │ human_review    │───────────────────────┘
-                                     │ (interrupt())   │
-                                     └────────────────┘
+           ┌──────────────────┐
+    ┌─────▶│ retrieve_kb_docs  │────┐
+    │      └──────────────────┘    │
+  START                             ▼           escalate=False
+    │      ┌─────────────────────┐ ┌───────┐   ┌──────────────────┐   ┌──────────┐
+    └─────▶│ retrieve_kb_tickets │▶│ agent │──▶│ decide_escalation │──▶│ finalize │──▶ END
+           └─────────────────────┘ └───────┘   └──────────────────┘   └──────────┘
+                                                      │ escalate=True      ▲
+                                                      ▼                    │
+                                               ┌────────────────┐          │
+                                               │ human_review    │─────────┘
+                                               │ (interrupt())   │
+                                               └────────────────┘
 ```
 
 - **`retrieve_kb_docs` / `retrieve_kb_tickets`** — partono in parallelo da
-  START (fan-out) e confluiscono entrambi su `agent` (fan-in, LangGraph
-  aspetta che entrambi abbiano scritto la loro chiave di stato prima di
-  eseguire `agent`, dato che non c'è conflitto tra `kb_docs_context` e
-  `kb_tickets_context`). Interrogano davvero le due collection Qdrant —
-  vedi la sezione dedicata più sotto.
-- **`agent`** — genera la bozza (passando il contesto recuperato dalle due
-  KB a `generate_draft_answer`) e applica la regola di escalation attuale
-  (parole chiave sensibili + soglia di confidenza — **verrà rivista**).
+  START (fan-out) e confluiscono su `agent` (fan-in): LangGraph aspetta che
+  entrambi abbiano scritto la propria chiave di stato, dato che non c'è
+  conflitto tra `kb_docs_context` e `kb_tickets_context`.
+- **`agent`** — genera la bozza e **osserva** il ticket, restituendo segnali
+  strutturati (categoria, priorità, approvazioni documentate, impatto
+  multi-utente, richiesta esplicita di un umano...). Non decide l'escalation.
+- **`decide_escalation`** — applica le regole di policy sui segnali. Vedi la
+  sezione dedicata più sotto.
 - **`human_review`** — nodo HITL: `interrupt()` sospende il grafo, il ticket
-  viene registrato nel `TicketStore` e diventa visibile in coda all'operatore.
+  entra nella coda dell'operatore con allegato l'elenco completo dei trigger.
 - **`finalize`** — consolida la risposta definitiva e aggiorna la cronologia.
+
+## Logica di escalation multisegnale
+
+`app/escalation.py`. Principio di progetto: **il modello osserva, il codice
+decide**. POL-006 §3 impone certe escalation *"regardless of the AI agent's
+confidence level"*: una regola così non è implementabile se è il modello
+stesso a decidere: dev'essere codice ispezionabile che nessuna risposta del
+modello può aggirare.
+
+Tre famiglie di segnali, in ordine di forza:
+
+| Famiglia | Fonte | Esempi di trigger |
+|---|---|---|
+| **Mandatori** | POL-006 §3, POL-008 §5 | categoria Security; terminazione involontaria; accesso a sistema sensibile senza doppia approvazione; spesa oltre soglia; software fuori catalogo; richiesta esplicita di un umano; impatto multi-utente; richiesta fuori scope da redirigere a HR/Legal |
+| **Confidenza** | POL-006 §4 | confidenza dichiarata sotto **0.65** (valore preso alla lettera dalla policy) |
+| **Retrieval** | POL-006 §4 e §6 | *grounding*: nessun passaggio di policy **né** ticket storico sopra la similarità minima; *precedente*: tra i ticket storici molto simili, la maggioranza fu escalata da un umano |
+
+La combinazione è un **OR su tutti i trigger**, deliberatamente conservativa:
+il costo degli errori è asimmetrico, non escalare un ticket che andava
+escalato è molto più grave dell'inverso. Ogni trigger porta con sé la clausola
+che lo giustifica (`POL-006 §3.1`, ...), il che serve sia all'operatore (vede
+*perché* gli è arrivato quel ticket) sia all'evaluation (permette di misurare
+l'accuratezza per singolo trigger, non solo quella complessiva).
+
+> **Soglie da ritarare.** `ESCALATION_MIN_RETRIEVAL_SCORE` è oggi calibrata
+> sull'embedding di fallback e va rimisurata sui punteggi reali di Gemini: le
+> scale di similarità di due provider diversi non sono confrontabili. Con
+> l'embedding di fallback la soglia scatta quasi sempre, producendo
+> sovra-escalation — è atteso, non un bug.
+
+## Provider: Google Gemini
+
+Sia la generazione sia l'embedding passano da Gemini (SDK `google-genai`).
+
+- **Generazione** — `gemini-3.7-flash` (configurabile). Usa lo **structured
+  output nativo**: si passa uno schema Pydantic in `response_schema` e la
+  risposta è garantita conforme, invece di chiedere "rispondi solo JSON" e
+  sperare che il parsing regga. I parametri di sampling (`temperature`,
+  `top_p`, `top_k`) non vengono impostati: sono deprecati sui modelli 3.x.
+- **Embedding** — `gemini-embedding-001` con **task type asimmetrici**:
+  `RETRIEVAL_DOCUMENT` in indicizzazione, `RETRIEVAL_QUERY` in query. Non è un
+  dettaglio: i due tipi producono rappresentazioni pensate per i due lati
+  della stessa ricerca, usarne uno solo degrada il ranking. Dimensione ridotta
+  a 768 via Matryoshka, con **ri-normalizzazione L2 esplicita** — un vettore
+  unitario a 3072 dimensioni non resta unitario se lo tronchi, e le soglie di
+  escalation si basano sul confronto tra punteggi.
+
+**Senza `GEMINI_API_KEY`** il sistema resta interamente eseguibile: risposte
+mock ed embedding hash-based deterministico. Serve a sviluppare e testare
+senza credenziali né costi, ma la qualità del retrieval non è rappresentativa.
+
+I due provider producono spazi vettoriali incompatibili. `ensure_index()` se
+ne accorge confrontando la dimensione della collection esistente con quella
+del provider attivo, e **ricostruisce l'indice da zero** invece di fallire con
+un errore oscuro a query time.
+
+## Tracing con MLflow
+
+`app/tracing.py`. All'avvio del backend `mlflow.langchain.autolog()` strumenta
+l'esecuzione del grafo: ogni chiamata a `/api/chat` produce **una trace** con
+uno span per nodo. Sopra l'autolog ci sono span espliciti su
+`retrieval.kb_docs`, `retrieval.kb_tickets` ed `escalation.decide`, cioè
+esattamente i punti i cui input/output servono all'evaluation.
+
+Gerarchia prodotta da un'invocazione:
+
+```
+LangGraph
+├── retrieve_kb_docs      └── retrieval.kb_docs
+├── retrieve_kb_tickets   └── retrieval.kb_tickets
+├── agent
+├── decide_escalation     └── escalation.decide
+├── route_after_decision
+└── human_review
+```
+
+La configurazione attiva (modelli, soglie, top-k) viene loggata come parametri
+di un run `service-startup`, così è sempre ricostruibile *con quale
+configurazione* è stato prodotto un certo insieme di trace.
+
+**MLflow è pensato come servizio a sé**: l'URI arriva da
+`MLFLOW_TRACKING_URI` e in Docker Compose punterà al container dedicato. Se la
+variabile non è impostata, MLflow scrive in locale su `./mlruns`. Il tracing
+**non può far cadere una richiesta**: se il server è irraggiungibile, il
+sistema continua a rispondere senza tracciare.
+
+> Limite noto: quando il grafo si sospende su `interrupt()`, il tracer di
+> MLflow emette un warning (`MlflowLangchainTracer has no attribute
+> 'on_interrupt'`). È innocuo — la trace viene registrata comunque — ma
+> segnala che l'integrazione non copre ancora nativamente gli interrupt di
+> LangGraph.
 
 ## Retrieval: `app/retrieval.py`
 
@@ -123,24 +214,14 @@ successive riusano l'indice già su disco — nessuna re-indicizzazione ad ogni
 avvio. Cancella la cartella `qdrant_data/` per forzare una re-indicizzazione
 (utile se aggiorni i file della knowledge base).
 
-**Embedding — limite noto**: per non introdurre dipendenze pesanti (`torch`,
-un modello locale) né richiedere una chiave API aggiuntiva per funzionare
-"out of the box" (stesso principio della modalità mock in `llm.py`),
-l'embedding usato oggi è un **hashing trick deterministico** puro Python
-(bag-of-words proiettato via hash in un vettore a 256 dimensioni). Cattura
-soprattutto sovrapposizione lessicale letterale, non vera similarità
-semantica. Ora che tutto il sistema (prompt, UI, knowledge base) è in
-inglese, la qualità è nettamente migliore rispetto a quando c'era un
-disallineamento di lingua tra query (italiane) e KB (inglese) — nei test gli
-score sono più che raddoppiati sulle stesse query tradotte in inglese — ma
-resta un limite di sinonimia: una query come "my colleague is harassing me"
-non recupera bene POL-008 (che pure ha la sezione esatta su questo, redirect
-a HR) perché "harassing" non condivide token con "harassment"/"misconduct"
-nel testo della policy. Un embedding reale (es. Voyage AI, che Anthropic
-raccomanda per l'uso con Claude) risolverebbe anche questo: il punto di
-innesto è `embed_text()` in `retrieval.py` — sostituirla, aggiornare
-`EMBEDDING_DIM` alla nuova dimensione del vettore, cancellare `qdrant_data/`
-e far ripartire l'indicizzazione.
+**Embedding.** Il provider attivo è Gemini (vedi la sezione "Provider" più
+sopra). Senza chiave API si ricade su un hashing trick deterministico che
+cattura sovrapposizione lessicale ma non significato: fa girare la pipeline a
+costo zero, ma non è rappresentativo. Un esempio concreto della differenza:
+con il fallback la query "my laptop battery drains very fast" restituisce come
+primo risultato un ticket di *furto* di laptop, agganciandosi al token
+"laptop" e ignorando il senso della richiesta. È un buon caso di regressione
+da riusare come baseline per verificare il guadagno degli embedding reali.
 
 ## Le due interfacce e come condividono il backend
 
@@ -188,9 +269,12 @@ quando scatta l'escalation, `review()` quando l'operatore risolve).
 ```
 app/
 ├── main.py       # endpoint FastAPI, 2 route HTML, orchestrazione grafo + TicketStore
-├── graph.py       # StateGraph LangGraph: retrieval + agent + human_review + finalize
+├── config.py      # configurazione centralizzata: modelli, soglie, URI servizi
+├── graph.py       # StateGraph LangGraph: retrieval + agent + decisione + HITL + finalize
+├── escalation.py   # logica multisegnale di escalation (regole di policy)
+├── tracing.py      # setup del tracing MLflow
 ├── retrieval.py    # indicizzazione e query sulle due collection Qdrant
-├── llm.py         # chiamata a Claude (o mock), persona "help desk IT", regole escalation
+├── llm.py         # chiamata a Gemini (o mock): bozza, confidenza e segnali sul ticket
 ├── store.py        # TicketStore in-memory (coda per l'interfaccia operatore)
 ├── threads.py       # ThreadRegistry in-memory (tutte le conversazioni, attive/chiuse)
 ├── schemas.py       # modelli Pydantic (richieste/risposte + coda ticket + thread)
@@ -240,23 +324,26 @@ esiste un modo pulito per annullare un interrupt pendente in LangGraph. Con
 `InMemorySaver` non è un problema pratico (si perde comunque al riavvio), ma
 va rivisto se si introduce un checkpointer persistente.
 
-## Roadmap (prossimi step, non ancora implementati)
+## Roadmap (prossimi step)
 
-Questi punti sono discussi in dettaglio nella conversazione, qui solo un
-riepilogo di cosa manca:
-
-1. **Embedding reale** — sostituire l'hashing trick in `retrieval.py` con
-   un provider vero (es. Voyage AI) per una qualità di retrieval migliore,
-   in particolare sulla sinonimia (vedi limite noto sopra).
-2. **Logica di decisione dell'escalation** — sostituire la regola attuale
-   (parole chiave + soglia di confidenza) con qualcosa di più robusto,
-   informato anche dai risultati del retrieval (es. nessun passaggio/ticket
-   sopra una soglia di similarità minima -> escalation forzata, come
-   previsto dalla policy POL-006 §4).
-3. **Deploy con Docker Compose** — servizi separati: `frontend`, `backend`,
-   `qdrant` (a quel punto non più locale ma un servizio containerizzato
-   vero, cambiando solo l'argomento del client da `path=` a `url=`),
-   `mlflow` (tracing/evaluation).
+1. **Dataset di evaluation** — due artefatti distinti: la ground truth di
+   escalation ricavabile dai 108 ticket (che copre però solo i trigger
+   deterministici §3), più un set di casi scritti a mano per i criteri §4,
+   che lo storico non copre. Vanno tenuti separati dalla KB: sono query con
+   decisione attesa, non ticket da indicizzare.
+2. **Evaluation con MLflow** — tre target da misurare separatamente:
+   qualità del retrieval (recall@k, MRR in leave-one-out), accuratezza della
+   decisione di escalation (metrica primaria: **recall sulla classe
+   "escalate"**, dato il costo asimmetrico degli errori) e qualità delle
+   risposte finali.
+3. **Taratura delle soglie** — una volta attivi gli embedding Gemini,
+   rimisurare `ESCALATION_MIN_RETRIEVAL_SCORE` e le soglie del segnale
+   "precedente" sui punteggi reali.
+4. **Deploy con Docker Compose** — quattro servizi: `frontend`, `backend`,
+   `qdrant` (non più locale ma containerizzato: cambia solo l'argomento del
+   client da `path=` a `url=`), `mlflow`. Con job di ingestion che popola le
+   collection all'avvio, creandole se assenti e aggiornandole altrimenti.
+   Package manager: **uv**.
 
 ## Estensioni minori già identificate
 
