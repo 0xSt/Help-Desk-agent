@@ -147,7 +147,7 @@ def _index_kb_docs() -> None:
 # Indicizzazione — kb_tickets (storico ticket risolti)
 # --------------------------------------------------------------------------
 
-def _ticket_to_point(ticket: Dict[str, Any]) -> PointStruct:
+def _ticket_to_point(ticket: Dict[str, Any], dataset: str) -> PointStruct:
     # Il testo embeddato è il "lato problema" (subject + description): è
     # quello che una nuova richiesta somiglierà semanticamente, non la
     # risoluzione. La risoluzione va invece nel payload, da mostrare come
@@ -170,6 +170,10 @@ def _ticket_to_point(ticket: Dict[str, Any]) -> PointStruct:
         payload={
             "text": resolution_text,
             "source": ticket["ticket_id"],
+            # "real" | "synthetic": permette di filtrare o segmentare in fase di
+            # evaluation (es. indicizzare i sintetici e valutare sui reali, o
+            # misurare separatamente le due popolazioni).
+            "dataset": dataset,
             "category": ticket["category"],
             "subcategory": ticket["subcategory"],
             "priority": ticket["priority"],
@@ -181,12 +185,24 @@ def _ticket_to_point(ticket: Dict[str, Any]) -> PointStruct:
 
 
 def _index_kb_tickets() -> None:
-    tickets_path = KB_DIR / "past_tickets.json"
-    tickets = json.loads(tickets_path.read_text(encoding="utf-8"))
-    points = [_ticket_to_point(t) for t in tickets]
+    """
+    Indicizza TUTTI i file `past_tickets*.json` presenti in knowledge_base/:
+    - `past_tickets.json`           -> ticket reali          (dataset="real")
+    - `past_tickets_synthetic.json` -> ticket sintetici      (dataset="synthetic")
+
+    La provenienza finisce nel payload come campo `dataset`, così in fase di
+    evaluation si possono separare le due popolazioni senza doverle tenere in
+    collection diverse.
+    """
+    points = []
+    for path in sorted(KB_DIR.glob("past_tickets*.json")):
+        dataset = "synthetic" if "synthetic" in path.stem else "real"
+        tickets = json.loads(path.read_text(encoding="utf-8"))
+        points.extend(_ticket_to_point(t, dataset) for t in tickets)
+        logger.info("  %s -> %d ticket (dataset=%s)", path.name, len(tickets), dataset)
     if points:
         _client.upsert(KB_TICKETS_COLLECTION, points=points)
-    logger.info("kb_tickets indicizzata: %d ticket storici", len(points))
+    logger.info("kb_tickets indicizzata: %d ticket storici in totale", len(points))
 
 
 # --------------------------------------------------------------------------

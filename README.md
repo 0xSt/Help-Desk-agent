@@ -82,11 +82,34 @@ Le due knowledge base vivono in `app/knowledge_base/`:
   collection `kb_docs`, **una sezione (`## Titolo`) per punto**: ogni chunk
   porta con sé il titolo del documento come contesto, così resta
   comprensibile anche isolato dal resto del file.
-- `past_tickets.json` — lo storico ticket, indicizzato come collection
+- `past_tickets*.json` — lo storico ticket, indicizzato come collection
   `kb_tickets`, **un ticket per punto**. Viene embeddato solo il "lato
   problema" (oggetto + descrizione, ciò a cui una nuova richiesta
   somiglierà), mentre risoluzione/categoria/priorità/esito di escalation
   finiscono nel payload da mostrare come contesto una volta recuperato il punto.
+  Vengono caricati **tutti** i file che corrispondono al pattern: oggi i 54
+  ticket reali più 54 sintetici, distinti nel payload dal campo `dataset`
+  (`"real"` / `"synthetic"`) per poterli separare in fase di evaluation.
+
+## Analisi esplorativa
+
+`analysis/eda.py` produce `analysis/eda_report.md` e i grafici in
+`analysis/figures/`. Copre la categorizzazione dei ticket, la distribuzione
+della ground truth di escalation, la mappatura di ogni escalation storica sul
+trigger POL-006 §3 corrispondente, i vincoli di lunghezza per l'embedding e
+le indicazioni per la costruzione dei dataset di evaluation. Si rigenera con:
+
+```bash
+python analysis/eda.py
+```
+
+**Estensione sintetica della KB.** I 54 ticket in
+`past_tickets_synthetic.json` replicano *esattamente* la distribuzione dei
+ticket reali per categoria e sottocategoria, e la stessa proporzione di
+escalation per categoria (13/54, 24.1%). Le etichette di escalation sono
+coerenti con i trigger di POL-006 §3, così il dataset esteso resta utilizzabile
+come ground truth. Gli ID usano il prefisso `TCK-2026-002xx` per essere
+distinguibili a colpo d'occhio dai reali (`TCK-2025-001xx`).
 
 **Qdrant in modalità locale**: `QdrantClient(path="qdrant_data")` non
 richiede un server esterno — scrive l'indice su disco nel processo stesso.
@@ -174,7 +197,8 @@ app/
 ├── schemas.py       # modelli Pydantic (richieste/risposte + coda ticket + thread)
 ├── knowledge_base/
 │   ├── policies/      # POL-001..008-*.md
-│   └── past_tickets.json
+│   ├── past_tickets.json            # 54 ticket reali      (dataset="real")
+│   └── past_tickets_synthetic.json  # 54 ticket sintetici  (dataset="synthetic")
 └── static/
     ├── shared.css    # design tokens comuni alle due interfacce
     ├── index.html     # interfaccia UTENTE
