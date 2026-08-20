@@ -71,12 +71,18 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
+    # Tutte le variabili utente (chiave API, modelli, soglie) arrivano dal
+    # file .env. ATTENZIONE alla precedenza: ciò che sta in `environment:`
+    # SOVRASCRIVE ciò che arriva da `env_file:`. Per questo la chiave API non
+    # va elencata qui sotto: una riga come `GEMINI_API_KEY: ${GEMINI_API_KEY:-}`
+    # scriverebbe attivamente una stringa vuota nel container ogni volta che
+    # l'interpolazione non trova il valore, mascherando un .env corretto.
+    env_file:
+      - path: .env
+        required: false
     environment:
+      # Solo i valori che il deploy DEVE imporre, a prescindere dal .env.
       QDRANT_URL: http://qdrant:6333
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
-      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
-      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-32}
       # Il job indicizza esplicitamente: l'auto-indicizzazione all'import
       # sarebbe lavoro duplicato.
       AUTO_INDEX: "false"
@@ -103,22 +109,18 @@ services:
         # vincolo le prime richieste troverebbero collection vuote e ogni
         # ticket verrebbe escalato per "retrieval senza appigli".
         condition: service_completed_successfully
+    # Vedi la nota sulla precedenza nel servizio `ingestion`: chiave API,
+    # modelli e soglie arrivano dal .env, non da `environment:`.
+    env_file:
+      - path: .env
+        required: false
     environment:
+      # Solo i valori che il deploy DEVE imporre, a prescindere dal .env.
       QDRANT_URL: http://qdrant:6333
       MLFLOW_TRACKING_URI: http://mlflow:5000
-      MLFLOW_EXPERIMENT: ${MLFLOW_EXPERIMENT:-helpdesk-agent}
       MLFLOW_ENABLED: "true"
       # L'indicizzazione è compito del job di ingestion.
       AUTO_INDEX: "false"
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.7-flash}
-      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
-      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
-      RETRIEVAL_TOP_K: ${RETRIEVAL_TOP_K:-3}
-      ESCALATION_CONFIDENCE_THRESHOLD: ${ESCALATION_CONFIDENCE_THRESHOLD:-0.65}
-      ESCALATION_MIN_RETRIEVAL_SCORE: ${ESCALATION_MIN_RETRIEVAL_SCORE:-0.45}
-      ESCALATION_PRECEDENT_SCORE_FLOOR: ${ESCALATION_PRECEDENT_SCORE_FLOOR:-0.55}
-      ESCALATION_PRECEDENT_RATIO: ${ESCALATION_PRECEDENT_RATIO:-0.5}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/tickets')\""]
       interval: 10s

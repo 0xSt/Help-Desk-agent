@@ -123,6 +123,29 @@ MLFLOW_EXPERIMENT = _env_str("MLFLOW_EXPERIMENT", "helpdesk-agent")
 MLFLOW_ENABLED = os.environ.get("MLFLOW_ENABLED", "true").lower() not in ("0", "false", "no")
 
 
+def describe_credentials() -> str:
+    """
+    Descrizione della credenziale attiva, sicura da mandare a log.
+
+    Mostra solo i primi e gli ultimi caratteri della chiave: basta a
+    verificare che sia arrivata quella giusta, senza esporla. Serve perché
+    l'assenza della chiave non produce un errore ma un *fallback silenzioso*
+    a embedding e risposte finte — un guasto che si manifesta come "qualità
+    inspiegabilmente bassa" invece che come eccezione.
+    """
+    key = GEMINI_API_KEY
+    if not key:
+        presenti = [n for n in ("GEMINI_API_KEY", "GOOGLE_API_KEY") if n in os.environ]
+        if presenti:
+            return (f"NESSUNA CHIAVE ATTIVA: {', '.join(presenti)} è presente "
+                    f"nell'ambiente ma vuota. Con Docker Compose ricorda che "
+                    f"`environment:` sovrascrive `env_file:`.")
+        return ("NESSUNA CHIAVE ATTIVA: né GEMINI_API_KEY né GOOGLE_API_KEY "
+                "sono presenti nell'ambiente. In locale il file .env NON viene "
+                "letto automaticamente: esporta le variabili a mano.")
+    return f"chiave attiva: {key[:6]}...{key[-4:]} ({len(key)} caratteri)"
+
+
 def as_params() -> dict:
     """
     Configurazione attiva in forma loggabile come parametri di un run MLflow.

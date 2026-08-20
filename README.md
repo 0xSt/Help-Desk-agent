@@ -447,6 +447,38 @@ Le funzioni di metrica girano già:
 python -m evaluation.run_evaluation --suite escalation --no-mlflow
 ```
 
+## Diagnostica rapida
+
+All'avvio, backend e job di ingestion loggano la credenziale attiva in forma
+mascherata:
+
+```
+Credenziali Gemini — chiave attiva: AIzaSy...fXYZ (39 caratteri)
+Modello: gemini-3.7-flash | embedding: gemini-embedding-001 (768 dim, provider gemini)
+```
+
+Se leggi `provider hashing-fallback` la chiave non è arrivata al processo, e
+il messaggio distingue i due casi: variabile assente, oppure presente ma
+vuota. Serve perché l'assenza di chiave **non produce un errore**: il sistema
+ricade su embedding e risposte finte e continua a funzionare, con qualità
+molto peggiore ma senza segnalare nulla.
+
+Due trappole già incontrate, entrambe risolte nel codice ma utili da
+conoscere:
+
+- **In Docker Compose, `environment:` sovrascrive `env_file:`.** Elencare una
+  variabile in `environment:` con un default vuoto (`${VAR:-}`) significa
+  scrivere attivamente una stringa vuota nel container ogni volta che
+  l'interpolazione non trova il valore, mascherando un `.env` perfettamente
+  corretto. Per questo chiave API, modelli e soglie arrivano da `env_file:`, e
+  in `environment:` restano solo i valori che il deploy deve imporre
+  (`QDRANT_URL`, `AUTO_INDEX`, `MLFLOW_TRACKING_URI`).
+- **MLflow 3.x valida l'header Host.** Per difendersi dal DNS rebinding
+  accetta di default solo `localhost` e IP privati, quindi rifiuta con 403 le
+  chiamate che arrivano con `Host: mlflow:5000`, cioè tutte quelle interne al
+  compose. Risolto con `--allowed-hosts` nel comando del server, elencando il
+  nome del servizio con e senza porta (il confronto è esatto sulla stringa).
+
 ## Limiti noti
 
 - **Il deploy Docker non è stato eseguito.** Dockerfile, `nginx.conf` e

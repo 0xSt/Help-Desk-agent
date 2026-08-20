@@ -32,9 +32,16 @@ EXPOSE 5000
 # --artifacts-destination: artifact su volume separato.
 # --host 0.0.0.0: altrimenti il server sarebbe raggiungibile solo da dentro
 #   il container e non dagli altri servizi del compose.
+# --allowed-hosts: MLflow 3.x valida l'header Host per difendersi dal DNS
+#   rebinding, e per impostazione predefinita accetta solo localhost e IP
+#   privati. Dentro Docker Compose il backend chiama "http://mlflow:5000",
+#   quindi manda `Host: mlflow:5000`: un nome di servizio che non è nella
+#   lista predefinita e viene rifiutato con 403. Vanno elencate entrambe le
+#   forme, con e senza porta, perché il confronto è esatto sulla stringa.
 CMD ["mlflow", "server", \
      "--host", "0.0.0.0", \
      "--port", "5000", \
      "--backend-store-uri", "sqlite:////mlflow/db/mlflow.db", \
      "--artifacts-destination", "/mlflow/artifacts", \
-     "--serve-artifacts"]
+     "--serve-artifacts", \
+     "--allowed-hosts", "mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000"]

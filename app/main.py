@@ -72,6 +72,11 @@ def _startup() -> None:
     in cui ha senso tentare. `setup_tracing()` degrada comunque senza
     interrompere l'avvio se il servizio non risponde.
     """
+    from app import config
+    logger.info("Credenziali Gemini — %s", config.describe_credentials())
+    logger.info("Modello: %s | embedding: %s (%d dim, provider %s)",
+                config.GEMINI_MODEL, config.GEMINI_EMBEDDING_MODEL,
+                config.active_embedding_dim(), config.embedding_provider())
     if setup_tracing():
         log_run_configuration()
 

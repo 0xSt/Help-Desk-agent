@@ -22,7 +22,22 @@ cp .env.example .env      # e valorizza GEMINI_API_KEY
 docker compose up --build
 ```
 
-Punti che più probabilmente richiederanno una correzione:
+**Già emersi e corretti al primo avvio reale (2026-08-20):**
+- [x] MLflow rifiutava con 403 le chiamate del backend (`Rejected request with
+      invalid Host header: mlflow:5000`). MLflow 3.x valida l'header Host
+      contro il DNS rebinding e accetta di default solo localhost e IP privati;
+      il nome di servizio Docker non è nella lista. Risolto aggiungendo
+      `--allowed-hosts` al comando del server.
+- [x] La chiave Gemini non arrivava ai container nonostante fosse nel `.env`.
+      Causa: in Compose `environment:` **sovrascrive** `env_file:`, quindi
+      `GEMINI_API_KEY: ${GEMINI_API_KEY:-}` scriveva una stringa vuota ogni
+      volta che l'interpolazione non trovava il valore. Risolto passando a
+      `env_file:` e lasciando in `environment:` solo ciò che il deploy deve
+      imporre. Aggiunta anche `config.describe_credentials()`, loggata
+      all'avvio di backend e ingestion, perché l'assenza di chiave non
+      produce un errore ma un fallback silenzioso.
+
+Punti ancora da verificare:
 - [ ] **healthcheck di Qdrant** — usa `bash -c 'exec 3<>/dev/tcp/localhost/6333'`
       perché quell'immagine non include `curl` né `wget`. Se manca anche bash
       resta `unhealthy` e blocca la catena. Rimedio: disabilitarlo e affidarsi

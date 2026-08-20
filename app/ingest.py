@@ -67,6 +67,10 @@ def wait_for_qdrant() -> bool:
 
 def main() -> int:
     logger.info("Avvio ingestion della knowledge base.")
+    # Diagnostica esplicita: senza chiave l'ingestion non fallisce, ricade
+    # sull'embedding di fallback e costruisce un indice di qualità scadente
+    # senza dirlo. Meglio che si veda subito, nella prima riga di log.
+    logger.info("Credenziali Gemini — %s", config.describe_credentials())
 
     if not wait_for_qdrant():
         return 1
