@@ -1,11 +1,12 @@
 """
 retrieval.py
 ============
-Retrieval reale sulle due knowledge base, usando Qdrant in modalità
-**locale** (nessun server esterno: `QdrantClient(path=...)` scrive un
-indice su disco nella directory del processo). Corrisponde allo "step
-successivo" annunciato quando i nodi di retrieval in graph.py erano ancora
-stub.
+Indicizzazione e interrogazione delle due knowledge base su **Qdrant**.
+
+Il client si adatta all'ambiente: in sviluppo locale `QdrantClient(path=...)`
+tiene l'indice su disco senza bisogno di alcun server, in Docker Compose
+`QDRANT_URL` lo fa puntare al servizio containerizzato. Cambia solo
+l'argomento del costruttore, il resto del modulo è identico nei due casi.
 
 Due collection:
 - `kb_docs`    — le policy IT in app/knowledge_base/policies/*.md, spezzate
@@ -13,11 +14,11 @@ Due collection:
 - `kb_tickets` — i ticket storici in app/knowledge_base/past_tickets.json,
                  un punto per ticket.
 
-INDICIZZAZIONE AUTOMATICA: al primo avvio del processo (import di questo
-modulo), se le collection non esistono ancora, vengono create e popolate
-leggendo i file bundled nel progetto. Le esecuzioni successive riusano
-l'indice già su disco (`QDRANT_PATH`, di default "qdrant_data/" nella
-working directory) — nessuna re-indicizzazione ad ogni avvio.
+INDICIZZAZIONE: `ensure_index()` sincronizza entrambe le collection creandole
+se assenti e aggiornandole altrimenti, in modo incrementale (vedi
+`sync_collection`). In sviluppo locale viene invocata all'import del modulo
+(`AUTO_INDEX`); in Docker Compose è il job dedicato `app/ingest.py` a
+chiamarla, prima che il backend accetti richieste.
 
 EMBEDDING: di default usa **Gemini** (`gemini-embedding-001`) con i task type
 asimmetrici previsti dall'API — `RETRIEVAL_DOCUMENT` per i testi indicizzati,
