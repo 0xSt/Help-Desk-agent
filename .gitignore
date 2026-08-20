@@ -15,6 +15,9 @@ qdrant_data/
 mlruns/
 mlartifacts/
 mlflow.db
+mlflow.db-journal
+mlflow.db-wal
+mlflow.db-shm
 
 # OS / editor
 .DS_Store
