@@ -405,24 +405,47 @@ esiste un modo pulito per annullare un interrupt pendente in LangGraph. Con
 `InMemorySaver` non è un problema pratico (si perde comunque al riavvio), ma
 va rivisto se si introduce un checkpointer persistente.
 
-## Roadmap (prossimi step)
+## Stato dei lavori
 
-1. **Dataset di evaluation** — due artefatti distinti: la ground truth di
-   escalation ricavabile dai 108 ticket (che copre però solo i trigger
-   deterministici §3), più un set di casi scritti a mano per i criteri §4,
-   che lo storico non copre. Vanno tenuti separati dalla KB: sono query con
-   decisione attesa, non ticket da indicizzare.
-2. **Evaluation con MLflow** — tre target da misurare separatamente:
-   qualità del retrieval (recall@k, MRR in leave-one-out), accuratezza della
-   decisione di escalation (metrica primaria: **recall sulla classe
-   "escalate"**, dato il costo asimmetrico degli errori) e qualità delle
-   risposte finali.
-3. **Taratura delle soglie** — una volta attivi gli embedding Gemini,
-   rimisurare `ESCALATION_MIN_RETRIEVAL_SCORE` e le soglie del segnale
-   "precedente" sui punteggi reali.
-4. **Verifica del deploy su Docker** — i file di build e il compose sono
-   scritti e validati staticamente, ma **non sono mai stati eseguiti**: vanno
-   provati con un `docker compose up --build` reale (vedi "Limiti noti").
+Gli step ancora aperti, con priorità e dettaglio operativo, sono in
+**[`TODO.md`](TODO.md)**. In sintesi: il sistema è completo come architettura
+ma tre verifiche sono ancora da fare (primo avvio reale di Docker, prima
+esecuzione con una chiave Gemini vera, taratura delle soglie), e l'evaluation
+è impostata ma non ancora eseguibile end-to-end.
+
+## Evaluation
+
+`evaluation/` contiene:
+
+| File | Stato | Contenuto |
+|---|---|---|
+| `metrics.py` | **completo** | funzioni pure e testate: recall@k, precision@k, MRR, hit rate; confusion matrix con precision/recall/F2 sulla classe "escalate"; breakdown per singolo trigger e per famiglia di segnale |
+| `datasets/escalation_cases.json` | **23 casi** | 15 positivi e 8 negativi, con decisione attesa e clausola di policy |
+| `run_evaluation.py` | **abbozzo** | scheletro, caricamento dataset e logging MLflow presenti; i punti che richiedono il sistema configurato sono marcati `TODO(n)` |
+
+Due scelte di progetto da tenere presenti.
+
+**I casi di evaluation non sono ticket.** Un'escalation da POL-006 §3 è una
+proprietà del *ticket* e vive nella KB. Un'escalation da §4 (bassa confidenza,
+retrieval senza appigli) è invece una proprietà dell'*interazione tra la
+richiesta e il sistema*: dipende da modello, prompt e contenuto dell'indice.
+Metterla in un ticket storico sarebbe implausibile — nessuno di quei ticket è
+stato gestito da un'AI — e inquinerebbe il corpus di RAG con precedenti la cui
+"risoluzione" non insegna nulla. Perciò stanno in un file separato, con schema
+diverso, e **non vengono mai indicizzati**.
+
+**La metrica primaria non è l'accuracy.** Con il 24% di positivi, un sistema
+che non escala mai otterrebbe il 76% di accuracy pur essendo inutile. E i due
+errori non pesano uguale: un falso negativo è un incidente di sicurezza non
+rivisto, un falso positivo è qualche minuto di un operatore. Quindi si guarda
+il **recall sulla classe "escalate"**, con la precision monitorata come costo
+operativo e `F2` a riassumerle.
+
+Le funzioni di metrica girano già:
+
+```bash
+python -m evaluation.run_evaluation --suite escalation --no-mlflow
+```
 
 ## Limiti noti
 
