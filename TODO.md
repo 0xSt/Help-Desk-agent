@@ -53,6 +53,8 @@ Il percorso Gemini non è mai stato eseguito contro l'API reale (nessuna
 connettività verso `generativelanguage.googleapis.com` in sviluppo). Il codice
 è scritto sulle firme reali dell'SDK, ma resta non verificato.
 
+- [ ] Eseguire `docker compose run --rm ingestion python -m app.diagnose` e
+      risolvere il primo controllo che fallisce.
 - [ ] Verificare il **nome del modello**: il default `GEMINI_MODEL` è una
       scelta plausibile ma non confermata. Elencare i modelli disponibili:
       ```python

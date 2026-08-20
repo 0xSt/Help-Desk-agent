@@ -449,6 +449,34 @@ python -m evaluation.run_evaluation --suite escalation --no-mlflow
 
 ## Diagnostica rapida
 
+### Se Gemini non funziona: `app/diagnose.py`
+
+```bash
+# nel container (consigliato: è lì che il problema si manifesta)
+docker compose run --rm ingestion python -m app.diagnose
+
+# oppure in locale, dopo aver esportato le variabili
+python -m app.diagnose
+```
+
+Esegue sei controlli in sequenza e si ferma al primo che fallisce, così si
+capisce *quale strato* è rotto:
+
+| # | Controllo | Isola |
+|---|---|---|
+| 1 | credenziali | chiave assente, vuota, con spazi o virgolette |
+| 2 | SDK | `google-genai` non installato nell'immagine |
+| 3 | DNS | il container non risolve il dominio |
+| 4 | TCP :443 | firewall o proxy aziendale |
+| 5 | modelli | nome di modello configurato inesistente |
+| 6 | chiamate reali | chiave rifiutata, permessi, quota, dimensione vettori |
+
+Serve perché tutte queste cause producono lo stesso sintomo apparente — "non
+funziona con Gemini" — ma richiedono rimedi completamente diversi. Gli errori
+noti dell'API vengono tradotti in un rimedio concreto invece di essere
+riportati grezzi.
+
+
 All'avvio, backend e job di ingestion loggano la credenziale attiva in forma
 mascherata:
 
