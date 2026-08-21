@@ -46,10 +46,12 @@ import os
 import re
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance, FieldCondition, Filter, MatchValue, PointStruct, VectorParams,
+)
 
 from app import config
 from app.tracing import trace_span
@@ -425,12 +427,42 @@ def ensure_index() -> Dict[str, Dict[str, int]]:
 # --------------------------------------------------------------------------
 
 
+def _exclusion_filter(exclude_sources: Optional[Sequence[str]]):
+    """
+    Filtro Qdrant che esclude dai risultati i punti con un dato `source`.
+
+    Serve all'evaluation in modalità **leave-one-out**: quando si usa un
+    ticket storico come query di test, quel ticket è anche indicizzato, e
+    senza esclusione verrebbe recuperato per primo (similarità ~1.0).
+    Falserebbe due cose insieme: le metriche di retrieval, ovviamente, ma
+    soprattutto la decisione di escalation, perché il payload di un ticket
+    contiene l'esito ("Escalated to a human agent: yes") e il modello si
+    ritroverebbe nel contesto la risposta esatta alla domanda che gli stiamo
+    ponendo. Non misureremmo la sua capacità di decidere, ma di copiare.
+    """
+    if not exclude_sources:
+        return None
+    return Filter(must_not=[
+        FieldCondition(key="source", match=MatchValue(value=src))
+        for src in exclude_sources
+    ])
+
+
 @trace_span("retrieval.kb_docs")
-def search_kb_docs(query: str, k: int = config.RETRIEVAL_TOP_K) -> List[Dict[str, Any]]:
+def search_kb_docs(
+    query: str,
+    k: int = config.RETRIEVAL_TOP_K,
+    exclude_sources: Optional[Sequence[str]] = None,
+) -> List[Dict[str, Any]]:
     """Ritorna i k chunk di policy più simili a `query`, come lista di dict
     {"text", "source", "score", "policy_id", "section_title", ...}."""
     try:
-        results = _client.query_points(KB_DOCS_COLLECTION, query=embed_query(query), limit=k)
+        results = _client.query_points(
+            KB_DOCS_COLLECTION,
+            query=embed_query(query),
+            limit=k,
+            query_filter=_exclusion_filter(exclude_sources),
+        )
         return [{**p.payload, "score": p.score} for p in results.points]
     except Exception:
         logger.exception("Retrieval fallito su kb_docs, ritorno lista vuota")
@@ -438,10 +470,19 @@ def search_kb_docs(query: str, k: int = config.RETRIEVAL_TOP_K) -> List[Dict[str
 
 
 @trace_span("retrieval.kb_tickets")
-def search_kb_tickets(query: str, k: int = config.RETRIEVAL_TOP_K) -> List[Dict[str, Any]]:
+def search_kb_tickets(
+    query: str,
+    k: int = config.RETRIEVAL_TOP_K,
+    exclude_sources: Optional[Sequence[str]] = None,
+) -> List[Dict[str, Any]]:
     """Ritorna i k ticket storici più simili a `query`, stessa forma di search_kb_docs."""
     try:
-        results = _client.query_points(KB_TICKETS_COLLECTION, query=embed_query(query), limit=k)
+        results = _client.query_points(
+            KB_TICKETS_COLLECTION,
+            query=embed_query(query),
+            limit=k,
+            query_filter=_exclusion_filter(exclude_sources),
+        )
         return [{**p.payload, "score": p.score} for p in results.points]
     except Exception:
         logger.exception("Retrieval fallito su kb_tickets, ritorno lista vuota")

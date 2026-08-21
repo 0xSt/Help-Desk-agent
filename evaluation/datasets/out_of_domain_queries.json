@@ -1,0 +1,30 @@
+{
+  "_README": {
+    "scopo": "Query deliberatamente estranee al dominio coperto dalla knowledge base, usate per calibrare ESCALATION_MIN_RETRIEVAL_SCORE.",
+    "perche_non_hanno_etichette": "La calibrazione della soglia di grounding non richiede etichette di escalation: serve solo confrontare la distribuzione dei punteggi di similarità delle query in dominio (i ticket storici) con quella delle query fuori dominio. La soglia va nel mezzo. Tenere la calibrazione separata dai casi etichettati evita di tarare i parametri sugli stessi dati con cui poi si misura il sistema.",
+    "criterio_di_scelta": "Richieste plausibili che un dipendente potrebbe davvero scrivere a un help desk, ma su argomenti che nessuna delle otto policy copre. Non frasi assurde: servono a stimare il punteggio di un caso realistico ma non supportato, non il caso peggiore possibile."
+  },
+
+  "queries": [
+    "How many vacation days do I have left this year?",
+    "What is the company policy on business class flights for long-haul travel?",
+    "Can you book the large meeting room for Thursday afternoon?",
+    "Where do I submit my expense report for last month's client dinner?",
+    "How do I recalibrate the torque sensor on the assembly line controller?",
+    "What time does the office canteen stop serving lunch?",
+    "Who do I contact about a parking permit for the underground garage?",
+    "Is there a shuttle service between the two office buildings?",
+    "What are the current interest rates on the employee savings scheme?",
+    "How do I enrol in the company pension plan?",
+    "Can I bring my dog to the office on Fridays?",
+    "What is the dress code for client meetings?",
+    "How do I register for the internal leadership training programme?",
+    "What is the procedure for reporting a workplace injury?",
+    "Can you tell me the weather forecast for the London office this week?",
+    "How do I order new business cards with my updated job title?",
+    "What is the deadline for submitting the annual performance self-review?",
+    "Where can I find the recipe used in the canteen's tomato soup?",
+    "How many people are currently employed in the Berlin office?",
+    "What is the company's carbon offset target for next year?"
+  ]
+}
