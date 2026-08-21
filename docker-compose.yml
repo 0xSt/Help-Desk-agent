@@ -78,7 +78,7 @@ services:
     # scriverebbe attivamente una stringa vuota nel container ogni volta che
     # l'interpolazione non trova il valore, mascherando un .env corretto.
     env_file:
-      - path: .env.example
+      - path: .env
         required: false
     environment:
       # Solo i valori che il deploy DEVE imporre, a prescindere dal .env.
@@ -112,7 +112,7 @@ services:
     # Vedi la nota sulla precedenza nel servizio `ingestion`: chiave API,
     # modelli e soglie arrivano dal .env, non da `environment:`.
     env_file:
-      - path: .env.example
+      - path: .env
         required: false
     environment:
       # Solo i valori che il deploy DEVE imporre, a prescindere dal .env.

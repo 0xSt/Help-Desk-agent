@@ -415,37 +415,105 @@ esecuzione con una chiave Gemini vera, taratura delle soglie), e l'evaluation
 
 ## Evaluation
 
-`evaluation/` contiene:
+Quattro suite, deliberatamente separate: mediarle insieme nasconderebbe che un
+retrieval mediocre e una logica di decisione sbagliata sono problemi diversi
+con rimedi diversi.
 
-| File | Stato | Contenuto |
+| Suite | Dati | Cosa misura |
 |---|---|---|
-| `metrics.py` | **completo** | funzioni pure e testate: recall@k, precision@k, MRR, hit rate; confusion matrix con precision/recall/F2 sulla classe "escalate"; breakdown per singolo trigger e per famiglia di segnale |
-| `datasets/escalation_cases.json` | **23 casi** | 15 positivi e 8 negativi, con decisione attesa e clausola di policy |
-| `run_evaluation.py` | **abbozzo** | scheletro, caricamento dataset e logging MLflow presenti; i punti che richiedono il sistema configurato sono marcati `TODO(n)` |
+| **retrieval** | 135 ticket in leave-one-out | i chunk recuperati sono quelli giusti |
+| **escalation-a** | 135 ticket, label `was_escalated_to_human` | se il modello **estrae bene i segnali** su cui operano le regole §3 (le regole sono fisse: se sbaglia, sbaglia la classificazione) |
+| **escalation-b** | 23 casi scritti a mano | i criteri §4 e i redirect fuori scope, che lo storico non copre affatto |
+| **answers** | campione di ticket | qualità delle risposte, giudicata da un LLM |
 
-Due scelte di progetto da tenere presenti.
+### Comandi
 
-**I casi di evaluation non sono ticket.** Un'escalation da POL-006 §3 è una
-proprietà del *ticket* e vive nella KB. Un'escalation da §4 (bassa confidenza,
-retrieval senza appigli) è invece una proprietà dell'*interazione tra la
-richiesta e il sistema*: dipende da modello, prompt e contenuto dell'indice.
-Metterla in un ticket storico sarebbe implausibile — nessuno di quei ticket è
-stato gestito da un'AI — e inquinerebbe il corpus di RAG con precedenti la cui
-"risoluzione" non insegna nulla. Perciò stanno in un file separato, con schema
-diverso, e **non vengono mai indicizzati**.
+Tutti da eseguire nella **root del progetto**. Due modi:
 
-**La metrica primaria non è l'accuracy.** Con il 24% di positivi, un sistema
-che non escala mai otterrebbe il 76% di accuracy pur essendo inutile. E i due
-errori non pesano uguale: un falso negativo è un incidente di sicurezza non
-rivisto, un falso positivo è qualche minuto di un operatore. Quindi si guarda
-il **recall sulla classe "escalate"**, con la precision monitorata come costo
-operativo e `F2` a riassumerle.
-
-Le funzioni di metrica girano già:
+**Nei container** (nessuna dipendenza da installare sull'host):
 
 ```bash
-python -m evaluation.run_evaluation --suite escalation --no-mlflow
+docker compose up -d qdrant mlflow          # servizi necessari
+docker compose run --rm backend python -m evaluation.calibrate_thresholds
+docker compose run --rm backend python -m evaluation.run_evaluation --suite all --sample 30
 ```
+
+**Sull'host** (comodo per iterare, richiede l'ambiente Python):
+
+```bash
+uv sync
+export $(grep -v '^#' .env | grep -v '^$' | xargs)   # il .env NON viene letto da solo
+export QDRANT_URL=http://localhost:6333
+export MLFLOW_TRACKING_URI=http://localhost:5000
+export AUTO_INDEX=false
+
+python -m evaluation.calibrate_thresholds
+python -m evaluation.run_evaluation --suite all --sample 30
+```
+
+### Opzioni
+
+```bash
+--suite retrieval|escalation-a|escalation-b|escalation|answers|all
+--sample N          # sottocampione stratificato per sottocategoria (0 = tutti)
+--judge-sample N    # quanti casi far giudicare dall'LLM (default 20)
+--k N               # top-k per le metriche di retrieval (default 3)
+--no-mlflow         # non registrare il run
+```
+
+### Ordine consigliato al primo giro
+
+```bash
+# 1. Taratura della soglia di grounding, PRIMA di misurare
+python -m evaluation.calibrate_thresholds
+#    -> scrivi il valore proposto in .env come ESCALATION_MIN_RETRIEVAL_SCORE
+
+# 2. Retrieval: se va male, i segnali §4 dell'escalation sono rumore
+python -m evaluation.run_evaluation --suite retrieval
+
+# 3. Le due suite di escalation
+python -m evaluation.run_evaluation --suite escalation --sample 40
+
+# 4. Qualità delle risposte, su campione
+python -m evaluation.run_evaluation --suite answers --judge-sample 20
+```
+
+### Scelte di progetto
+
+**La taratura non usa i casi di test.** `calibrate_thresholds.py` confronta la
+distribuzione dei punteggi delle query in dominio con quelle fuori dominio
+(`out_of_domain_queries.json`): nessuna delle due popolazioni ha etichette.
+Tarare la soglia guardando i 23 casi etichettati e poi misurare su quegli
+stessi casi significherebbe adattare i parametri al test set.
+
+**Leave-one-out ovunque si usino i ticket come query.** Non solo perché una
+query recupererebbe sé stessa, ma per una ragione più seria: il payload dei
+ticket contiene `Escalated to a human agent: yes`, quindi senza esclusione il
+modello leggerebbe nel contesto la risposta esatta alla domanda che gli stiamo
+ponendo. Misureremmo la capacità di copiare, non di decidere.
+
+**La metrica primaria non è l'accuracy.** Con il 24% di positivi, un sistema
+che non escala mai otterrebbe il 76%. E gli errori non pesano uguale: un falso
+negativo è un incidente di sicurezza non rivisto, un falso positivo è qualche
+minuto di un operatore. Si guarda il **recall sulla classe "escalate"**, con
+la precision come costo operativo e `F2` a riassumerle.
+
+**Per il retrieval su `kb_tickets` le primarie sono `hit_rate@k` e `MRR`.**
+Con la proxy "stessa sottocategoria è rilevante" una query ha fino a 9
+documenti rilevanti: con k=3 la `recall@3` ha un tetto di 0,33 e un sistema
+perfetto sembrerebbe pessimo. `capped_recall@k` normalizza sul massimo
+ottenibile; la `recall` grezza resta nei report solo per trasparenza.
+
+**Il giudice non confronta con `resolution_summary`.** Sono testi con
+destinatari diversi: la risposta è per l'utente, il summary è una nota interna
+scritta a posteriori. Una risposta ottima non gli somiglierà mai. I criteri
+giudicati sono groundedness, relevance e **policy compliance**, quest'ultimo
+scritto sul dominio perché è il più importante qui e nessuno scorer generico
+lo copre.
+
+**Ogni run salva una tabella per-caso** come artifact MLflow. Un
+`hit_rate = 0,71` dice che qualcosa non va, non cosa: la tabella mostra quali
+casi falliscono e con cosa vengono confusi.
 
 ## Diagnostica rapida
 

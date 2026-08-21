@@ -56,6 +56,7 @@ class AgentState(TypedDict):
     """Stato condiviso che fluisce tra i nodi del grafo per un singolo 'giro'."""
     user_query: str                           # domanda/ticket dell'utente in questo turno
     history: List[Dict[str, str]]             # cronologia dei turni precedenti (persistita dal checkpointer)
+    exclude_sources: List[str]                # id da escludere dal retrieval (leave-one-out in evaluation)
     kb_docs_context: List[Dict[str, Any]]     # passaggi di policy recuperati da kb_docs (Qdrant)
     kb_tickets_context: List[Dict[str, Any]]  # ticket storici simili recuperati da kb_tickets (Qdrant)
     draft_answer: str                         # bozza generata dal nodo agent
@@ -75,7 +76,11 @@ def retrieve_kb_docs_node(state: AgentState) -> Dict[str, Any]:
     dell'utente — sono il contesto che aiuta l'agente a rispondere in modo
     coerente con le procedure aziendali reali invece di inventare la prassi.
     """
-    results = search_kb_docs(state["user_query"], k=config.RETRIEVAL_TOP_K)
+    results = search_kb_docs(
+        state["user_query"],
+        k=config.RETRIEVAL_TOP_K,
+        exclude_sources=state.get("exclude_sources") or None,
+    )
     logger.info("retrieve_kb_docs_node -> %d passaggi recuperati", len(results))
     return {"kb_docs_context": results}
 
@@ -86,7 +91,16 @@ def retrieve_kb_tickets_node(state: AgentState) -> Dict[str, Any]:
     (con relativa risoluzione, categoria ed esito di escalation) da usare
     come precedente concreto nella risposta.
     """
-    results = search_kb_tickets(state["user_query"], k=config.RETRIEVAL_TOP_K)
+    results = search_kb_tickets(
+        state["user_query"],
+        k=config.RETRIEVAL_TOP_K,
+        # In evaluation si esclude il ticket usato come query: senza, il
+        # retrieval lo troverebbe con similarità ~1.0 e il modello leggerebbe
+        # nel contesto "Escalated to a human agent: yes", cioè la risposta
+        # esatta alla domanda che gli stiamo ponendo. In esercizio normale la
+        # chiave è assente e il filtro non viene applicato.
+        exclude_sources=state.get("exclude_sources") or None,
+    )
     logger.info("retrieve_kb_tickets_node -> %d ticket simili recuperati", len(results))
     return {"kb_tickets_context": results}
 

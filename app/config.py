@@ -40,12 +40,18 @@ def _env_int(name: str, default: int) -> int:
 # pienamente funzionante in "modalità mock" (vedi llm.py e retrieval.py):
 # scelta deliberata, permette di sviluppare, testare e far girare la demo
 # senza credenziali e senza costi.
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
 # Nomi modello configurabili: la famiglia Gemini evolve rapidamente e non
 # vogliamo dover toccare il codice per provarne uno diverso.
 GEMINI_MODEL = _env_str("GEMINI_MODEL", "gemini-3.1-flash-lite")
 GEMINI_EMBEDDING_MODEL = _env_str("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+
+# Modello usato come giudice nell'evaluation delle risposte. Configurabile
+# separatamente perché ha senso poterlo tenere diverso (e più capace) da
+# quello che genera le risposte: un giudice che condivide con l'esaminato
+# esattamente gli stessi punti ciechi tende a non vederne gli errori.
+JUDGE_MODEL = _env_str("JUDGE_MODEL", GEMINI_MODEL)
 
 # gemini-embedding-001 produce 3072 dimensioni di default, riducibili via
 # `output_dimensionality` grazie al Matryoshka Representation Learning: i
@@ -156,6 +162,7 @@ def as_params() -> dict:
     return {
         "llm_provider": "gemini" if GEMINI_API_KEY else "mock",
         "llm_model": GEMINI_MODEL,
+        "judge_model": JUDGE_MODEL,
         "embedding_provider": embedding_provider(),
         "embedding_model": GEMINI_EMBEDDING_MODEL,
         "embedding_dim": active_embedding_dim(),
