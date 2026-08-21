@@ -57,6 +57,28 @@ def recall_at_k(retrieved: Sequence[str], relevant: Set[str], k: int) -> float:
     return hits / len(relevant)
 
 
+def capped_recall_at_k(retrieved: Sequence[str], relevant: Set[str], k: int) -> float:
+    """
+    Recall con denominatore limitato a `min(|rilevanti|, k)`.
+
+    Perché serve: con la proxy "stessa sottocategoria è rilevante", una query
+    di Password Reset ha 9 documenti rilevanti su 135. Con k=3 un sistema
+    **perfetto** può recuperarne al massimo 3, quindi `recall@3` avrebbe un
+    tetto di 0,33 e sembrerebbe pessimo pur essendo ottimo. È un artefatto
+    della misura, non una proprietà del sistema.
+
+    Questa variante normalizza sul massimo ottenibile, così 1.0 significa
+    davvero "ha recuperato tutto ciò che poteva". Resta comunque una metrica
+    secondaria: le primarie per kb_tickets sono `hit_rate@k` e `mrr`, che il
+    problema non ce l'hanno per costruzione.
+    """
+    if not relevant or k <= 0:
+        return 0.0
+    massimo = min(len(relevant), k)
+    hits = sum(1 for doc in retrieved[:k] if doc in relevant)
+    return hits / massimo
+
+
 def precision_at_k(retrieved: Sequence[str], relevant: Set[str], k: int) -> float:
     """Quota dei primi k risultati che sono effettivamente rilevanti."""
     if k <= 0:
@@ -112,10 +134,13 @@ def aggregate_retrieval(cases: Iterable[RetrievalCase], k: int = 3) -> Dict[str,
     n = len(usable)
     scores = sorted(c.top_score for c in usable)
     return {
-        f"recall@{k}": sum(recall_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
-        f"precision@{k}": sum(precision_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
+        # Primarie: non hanno il tetto artificiale descritto in capped_recall_at_k.
         f"hit_rate@{k}": sum(hit_rate_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
         "mrr": sum(reciprocal_rank(c.retrieved_ids, c.relevant_ids) for c in usable) / n,
+        # Secondarie.
+        f"capped_recall@{k}": sum(capped_recall_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
+        f"recall@{k}": sum(recall_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
+        f"precision@{k}": sum(precision_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
         "n_cases": float(n),
         # Statistiche sui punteggi, per la taratura delle soglie.
         "top_score_mean": sum(scores) / n,

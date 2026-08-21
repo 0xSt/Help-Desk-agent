@@ -73,6 +73,11 @@ connettività verso `generativelanguage.googleapis.com` in sviluppo). Il codice
       chunk di policy + 135 ticket).
 
 ### 3. Taratura delle soglie di escalation
+**Strumento pronto**: `python -m evaluation.calibrate_thresholds`. Confronta la
+distribuzione dei punteggi delle query in dominio (ticket in leave-one-out) con
+quelle fuori dominio e propone la soglia che le separa meglio. Non usa i casi
+etichettati, così restano intatti come test set.
+
 `ESCALATION_MIN_RETRIEVAL_SCORE` è oggi calibrata sull'embedding di fallback e
 **non è trasferibile**: le scale di similarità di provider diversi non sono
 confrontabili. Con il valore attuale il trigger di grounding scatta quasi
@@ -100,12 +105,17 @@ numerati nel file corrispondono a queste voci:
 - [ ] **TODO(2)** — decidere se aggiungere i 135 ticket storici come suite
       separata. Sono ground truth vera ma coprono solo i trigger §3, e vanno
       usati in leave-one-out. Da non mescolare con i casi scritti a mano.
-- [ ] **TODO(3)** — leave-one-out nel retrieval: escludere il ticket stesso
-      dai risultati (filtro `must_not` su `source`, oppure recuperare k+1 e
-      scartare l'auto-match).
-- [ ] **TODO(4)** — definire la ground truth di rilevanza: per `kb_tickets` si
-      può usare la stessa `subcategory` come proxy automatico; per `kb_docs`
-      serve una mappatura categoria → policy attese scritta a mano.
+- [x] **TODO(3)** — leave-one-out implementato: `search_kb_docs` e
+      `search_kb_tickets` accettano `exclude_sources`, tradotto in un filtro
+      Qdrant `must_not` su `source`.
+- [x] **TODO(4)** — ground truth definita: `kb_tickets` usa la proxy "stessa
+      sottocategoria", `kb_docs` la mappa in
+      `evaluation/datasets/policy_relevance.json`.
+- [ ] **Rivedere la mappa `policy_relevance.json`** — scritta derivandola dal
+      testo delle policy, va riletta: è ground truth, un errore qui si propaga
+      a tutte le metriche di retrieval. Attenzione in particolare a
+      `Outlook Issues`, mappata su POL-004 §5 per assenza di una policy che
+      copra i client di posta (probabile buco della knowledge base).
 - [ ] **TODO(5)** — qualità delle risposte con `mlflow.genai.evaluate()` e
       scorer custom di policy compliance.
 
@@ -151,6 +161,20 @@ negativi).
       introduce un checkpointer persistente.
 
 ---
+
+## Note dalle prime misurazioni
+
+Numeri raccolti **con l'embedding di fallback**, quindi non rappresentativi
+del sistema con Gemini: servono solo a validare gli strumenti.
+
+- La calibrazione riporta una separazione del 72,5% tra query in dominio e
+  fuori dominio, sotto la soglia di accettabilità: conferma che con il
+  fallback nessuna soglia funziona bene. Da rimisurare con Gemini attivo.
+- Sulla suite di retrieval, `recall@3 = 0,17` contro `hit_rate@3 = 0,77`
+  sugli stessi identici dati: è l'artefatto del tetto previsto, e conferma
+  la scelta di `hit_rate` e `mrr` come metriche primarie.
+- 14 casi su 31 non recuperano la policy attesa. Da capire, dopo il passaggio
+  a Gemini, quanto sia colpa del retrieval e quanto della mappa di rilevanza.
 
 ## Completato
 
