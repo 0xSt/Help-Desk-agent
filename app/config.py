@@ -40,11 +40,11 @@ def _env_int(name: str, default: int) -> int:
 # pienamente funzionante in "modalità mock" (vedi llm.py e retrieval.py):
 # scelta deliberata, permette di sviluppare, testare e far girare la demo
 # senza credenziali e senza costi.
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
 # Nomi modello configurabili: la famiglia Gemini evolve rapidamente e non
 # vogliamo dover toccare il codice per provarne uno diverso.
-GEMINI_MODEL = _env_str("GEMINI_MODEL", "gemini-3.7-flash")
+GEMINI_MODEL = _env_str("GEMINI_MODEL", "gemini-3.1-flash-lite")
 GEMINI_EMBEDDING_MODEL = _env_str("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 
 # gemini-embedding-001 produce 3072 dimensioni di default, riducibili via
