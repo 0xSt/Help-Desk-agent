@@ -7,6 +7,16 @@ Legenda priorità: **P0** blocca il resto · **P1** step principale · **P2** ri
 
 ---
 
+## Sicurezza — da fare subito
+
+- [ ] **Revocare la chiave API pubblicata su GitHub.** Il file `.env.example`
+      committato nel repository pubblico conteneva una chiave Gemini vera
+      (`AIzaSyD0Yo...`). Rimuoverla dal file non basta: resta nella storia di
+      Git ed è già stata indicizzata. **L'unica azione efficace è revocarla e
+      generarne una nuova** da Google AI Studio.
+      Corretto nel codice: `.env.example` non contiene più chiavi e il compose
+      torna a leggere `.env` (non versionato) invece di `.env.example`.
+
 ## P0 — Verifiche che sbloccano tutto il resto
 
 Nessuna delle attività P1 produce risultati sensati finché queste non sono
@@ -94,30 +104,18 @@ sempre e il sistema sovra-escala.
 
 ## P1 — Evaluation
 
-### 4. Completare l'harness (`evaluation/run_evaluation.py`)
-Lo scheletro, il caricamento dei dataset e il logging MLflow ci sono. I `TODO`
-numerati nel file corrispondono a queste voci:
+### 4. Harness di evaluation — **completato**
+Tutte e quattro le suite sono implementate ed eseguibili
+(`retrieval`, `escalation-a`, `escalation-b`, `answers`). Vedi la sezione
+"Evaluation" del README per i comandi.
 
-- [ ] **TODO(1)** — invocare davvero il sistema nella suite di escalation.
-      Preferire l'esecuzione del grafo con lettura di `escalation_triggers`
-      dallo stato (misura il sistema com'è in produzione) rispetto alla
-      chiamata diretta a `escalation.decide()`.
-- [ ] **TODO(2)** — decidere se aggiungere i 135 ticket storici come suite
-      separata. Sono ground truth vera ma coprono solo i trigger §3, e vanno
-      usati in leave-one-out. Da non mescolare con i casi scritti a mano.
-- [x] **TODO(3)** — leave-one-out implementato: `search_kb_docs` e
-      `search_kb_tickets` accettano `exclude_sources`, tradotto in un filtro
-      Qdrant `must_not` su `source`.
-- [x] **TODO(4)** — ground truth definita: `kb_tickets` usa la proxy "stessa
-      sottocategoria", `kb_docs` la mappa in
-      `evaluation/datasets/policy_relevance.json`.
-- [ ] **Rivedere la mappa `policy_relevance.json`** — scritta derivandola dal
-      testo delle policy, va riletta: è ground truth, un errore qui si propaga
-      a tutte le metriche di retrieval. Attenzione in particolare a
-      `Outlook Issues`, mappata su POL-004 §5 per assenza di una policy che
-      copra i client di posta (probabile buco della knowledge base).
-- [ ] **TODO(5)** — qualità delle risposte con `mlflow.genai.evaluate()` e
-      scorer custom di policy compliance.
+Resta aperto:
+- [ ] **Eseguire l'evaluation vera con Gemini attivo.** Tutti i numeri
+      raccolti finora vengono dalla modalità mock e non dicono nulla sul
+      sistema reale.
+- [ ] **Confrontare un giudice diverso dal modello valutato.** `JUDGE_MODEL`
+      è configurabile apposta: un giudice che condivide con l'esaminato gli
+      stessi punti ciechi tende a non vederne gli errori.
 
 ### 5. Completare i dataset di evaluation
 `evaluation/datasets/escalation_cases.json` ha 23 casi (15 positivi, 8
@@ -164,8 +162,8 @@ negativi).
 
 ## Note dalle prime misurazioni
 
-Numeri raccolti **con l'embedding di fallback**, quindi non rappresentativi
-del sistema con Gemini: servono solo a validare gli strumenti.
+Numeri raccolti **in modalità mock**, quindi non rappresentativi del sistema
+con Gemini: servono solo a validare gli strumenti.
 
 - La calibrazione riporta una separazione del 72,5% tra query in dominio e
   fuori dominio, sotto la soglia di accettabilità: conferma che con il
@@ -175,6 +173,14 @@ del sistema con Gemini: servono solo a validare gli strumenti.
   la scelta di `hit_rate` e `mrr` come metriche primarie.
 - 14 casi su 31 non recuperano la policy attesa. Da capire, dopo il passaggio
   a Gemini, quanto sia colpa del retrieval e quanto della mappa di rilevanza.
+- Suite B (mock): recall 0,73 e precision 1,00 su 23 casi. Il breakdown per
+  trigger mostra dove si perde: `POL-008 §5` (redirect fuori scope verso
+  HR/Legal) ha recall **0,00** e `POL-006 §3.5` (richiesta esplicita di un
+  umano) 0,33, mentre i trigger §3.1/§3.2/§3.3 sono a 1,00. Sono proprio i
+  segnali che dipendono dalla comprensione del testo, cioè quelli che il mock
+  non sa produrre: il primo confronto da fare con Gemini attivo.
+- Suite A (mock, campione 20): recall 1,00 ma precision 0,36, cioè forte
+  sovra-escalation. Atteso con la soglia di grounding non ancora tarata.
 
 ## Completato
 

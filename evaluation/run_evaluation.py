@@ -23,7 +23,8 @@ import json
 import logging
 from pathlib import Path
 import random
-from typing import Any, Dict, List, Set
+import uuid
+from typing import Any, Dict, List, Optional, Set
 
 from app.retrieval import search_kb_docs, search_kb_tickets
 from evaluation.metrics import (
@@ -127,41 +128,152 @@ def stratified_sample(cases: List[Dict[str, Any]], n: int,
 # Suite: decisione di escalation
 # ==========================================================================
 
-def run_escalation_suite() -> Dict[str, float]:
+def run_system(query: str, exclude_sources: Optional[List[str]] = None) -> Dict[str, Any]:
     """
-    Esegue il grafo su ogni caso e confronta la decisione con quella attesa.
+    Esegue il sistema reale su una richiesta e ne restituisce l'esito.
 
-    TODO(1) — Invocare il sistema senza passare dal nodo human_review:
-        interessa la *decisione*, non l'interrupt. Due strade possibili:
-        a) chiamare direttamente `escalation.decide()` dopo aver eseguito a
-           mano retrieval e `generate_draft_answer` — veloce e isolato, ma
-           salta il cablaggio del grafo;
-        b) eseguire il grafo e leggere `escalation_triggers` dallo stato.
-        Preferibile (b): misura il sistema com'è davvero in produzione.
+    Invoca il grafo LangGraph completo, non le singole funzioni: misuriamo il
+    sistema com'è in produzione, cablaggio compreso. Se la decisione è di
+    escalare, il grafo si sospende su `interrupt()` e `invoke` ritorna con la
+    chiave `__interrupt__`, il cui payload contiene bozza, confidenza e
+    l'elenco completo dei trigger scattati. Se invece non escala, il grafo
+    arriva a `finalize` e l'esito è nello stato.
 
-    TODO(2) — Decidere se valutare anche i 135 ticket storici oltre ai casi
-        scritti a mano. Sono ground truth vera, ma coprono solo i trigger
-        deterministici §3 e in leave-one-out: da tenere come suite separata,
-        non mescolata a questa.
+    Ogni chiamata usa un `thread_id` nuovo: i casi di test sono indipendenti e
+    non devono ereditare la cronologia l'uno dell'altro.
+    """
+    from app.graph import graph
+
+    config_lg = {"configurable": {"thread_id": f"eval-{uuid.uuid4()}"}}
+    stato = {"user_query": query, "exclude_sources": exclude_sources or []}
+    out = graph.invoke(stato, config_lg)
+
+    if "__interrupt__" in out:
+        payload = out["__interrupt__"][0].value
+        return {
+            "escalated": True,
+            "triggers": payload.get("triggers", []),
+            "answer": payload.get("draft_answer", ""),
+            "confidence": payload.get("confidence"),
+            "kb_docs": out.get("kb_docs_context", []),
+            "kb_tickets": out.get("kb_tickets_context", []),
+        }
+
+    return {
+        "escalated": False,
+        "triggers": [],
+        "answer": out.get("final_answer", ""),
+        "confidence": out.get("confidence"),
+        "kb_docs": out.get("kb_docs_context", []),
+        "kb_tickets": out.get("kb_tickets_context", []),
+    }
+
+
+def run_escalation_suite_b() -> Dict[str, float]:
+    """
+    SUITE B — casi scritti a mano (`escalation_cases.json`).
+
+    È la suite che copre i criteri di POL-006 §4 e i redirect fuori scope,
+    che lo storico dei ticket non contiene affatto: nessun ticket passato è
+    stato escalato "perché l'AI non era sicura", visto che sono tutti stati
+    gestiti da umani.
+
+    Nessuna esclusione dal retrieval: queste query non sono ticket indicizzati.
     """
     cases = load_escalation_cases()
-    results: List[EscalationCase] = []
+    risultati: List[EscalationCase] = []
+    per_caso: List[Dict[str, Any]] = []
 
     for c in cases:
-        # TODO(1): sostituire con l'invocazione reale del sistema.
-        predicted_escalate = False
-        predicted_codes: List[str] = []
+        esito = run_system(c["query"])
+        codici = [t["code"] for t in esito["triggers"]]
 
-        results.append(EscalationCase(
+        risultati.append(EscalationCase(
             case_id=c["case_id"],
-            predicted_escalate=predicted_escalate,
+            predicted_escalate=esito["escalated"],
             expected_escalate=c["expected_escalate"],
-            predicted_trigger_codes=predicted_codes,
+            predicted_trigger_codes=codici,
             expected_trigger_codes=c["expected_trigger_codes"],
             trigger_family=c["trigger_family"],
         ))
+        per_caso.append({
+            "case_id": c["case_id"],
+            "query": c["query"][:90],
+            "expected": c["expected_escalate"],
+            "predicted": esito["escalated"],
+            "corretto": esito["escalated"] == c["expected_escalate"],
+            "expected_codes": ", ".join(c["expected_trigger_codes"]),
+            "predicted_codes": ", ".join(codici),
+            "confidence": esito["confidence"],
+            "family": c["trigger_family"],
+        })
 
-    return evaluate_escalation(results)
+    _log_table(per_caso, "escalation_suite_b_per_case")
+    return {f"suiteB/{k}": v for k, v in evaluate_escalation(risultati).items()}
+
+
+def run_escalation_suite_a(sample: int = 0) -> Dict[str, float]:
+    """
+    SUITE A — i ticket storici, con `was_escalated_to_human` come ground truth.
+
+    Attenzione a cosa misura davvero: l'EDA aveva mostrato che queste
+    etichette sono spiegate al 100% dai trigger deterministici di POL-006 §3.
+    Le regole quindi sono note e fisse; quello che questa suite mette alla
+    prova è se **il modello estrae correttamente i segnali** su cui le regole
+    operano (categoria del ticket, presenza di approvazioni, impatto
+    multi-utente). È l'anello debole del percorso mandatorio.
+
+    Il leave-one-out è indispensabile qui, più ancora che nel retrieval: il
+    payload dei ticket contiene l'esito dell'escalation, e senza esclusione il
+    modello lo leggerebbe nel contesto.
+    """
+    cases = load_ticket_cases()
+    if sample:
+        cases = stratified_sample(cases, sample)
+
+    risultati: List[EscalationCase] = []
+    per_caso: List[Dict[str, Any]] = []
+
+    for c in cases:
+        esito = run_system(c["query"], exclude_sources=[c["case_id"]])
+        codici = [t["code"] for t in esito["triggers"]]
+
+        risultati.append(EscalationCase(
+            case_id=c["case_id"],
+            predicted_escalate=esito["escalated"],
+            expected_escalate=c["expected_escalate"],
+            predicted_trigger_codes=codici,
+            # Lo storico non annota quale clausola ha fatto scattare
+            # l'escalation, quindi non c'è un atteso per-trigger da
+            # confrontare: il breakdown per trigger vive nella suite B.
+            expected_trigger_codes=[],
+            trigger_family="mandatory" if c["expected_escalate"] else "none",
+        ))
+        per_caso.append({
+            "ticket_id": c["case_id"],
+            "subcategory": c["subcategory"],
+            "expected": c["expected_escalate"],
+            "predicted": esito["escalated"],
+            "corretto": esito["escalated"] == c["expected_escalate"],
+            "predicted_codes": ", ".join(codici),
+            "confidence": esito["confidence"],
+        })
+
+    _log_table(per_caso, "escalation_suite_a_per_case")
+
+    metriche = {f"suiteA/{k}": v for k, v in evaluate_escalation(risultati).items()}
+
+    # Accuratezza per sottocategoria: se il sistema sbaglia, serve sapere se
+    # sbaglia dappertutto o su un'area specifica.
+    per_sub: Dict[str, List[bool]] = {}
+    for r, c in zip(risultati, cases):
+        per_sub.setdefault(c["subcategory"], []).append(
+            r.predicted_escalate == r.expected_escalate)
+    for sub, esiti in sorted(per_sub.items()):
+        chiave = sub.replace("/", "-").replace(" ", "_")
+        metriche[f"suiteA/subcategory/{chiave}/accuracy"] = sum(esiti) / len(esiti)
+
+    return metriche
 
 
 # ==========================================================================
@@ -254,16 +366,55 @@ def run_retrieval_suite(k: int = 3, sample: int = 0) -> Dict[str, float]:
 # Suite: qualità delle risposte
 # ==========================================================================
 
-def run_answer_quality_suite() -> Dict[str, float]:
+def run_answer_quality_suite(sample: int = 20) -> Dict[str, float]:
     """
-    TODO(5) — Implementare con `mlflow.genai.evaluate()` e i suoi scorer
-        (RetrievalGroundedness, RetrievalSufficiency, RelevanceToQuery,
-        Correctness contro `resolution_summary`), più uno scorer custom di
-        policy compliance. Richiede una chiave API attiva: è un giudizio dato
-        da un modello, non una formula.
+    Qualità delle risposte, giudicata da un LLM (vedi `evaluation/judge.py`).
+
+    Campionata di default: ogni caso costa una generazione più una chiamata di
+    giudizio, quindi valutare tutti i 135 ticket a ogni iterazione non è
+    sostenibile né necessario per capire se la qualità sta salendo o scendendo.
+
+    Vengono giudicate **anche le risposte dei ticket escalati**: la bozza non
+    è scartata quando si escala, viene consegnata all'operatore che la corregge.
+    Una bozza scadente gli fa perdere tempo anche quando la decisione di
+    escalare era giusta.
     """
-    logger.warning("Suite 'answers' non ancora implementata (vedi TODO(5)).")
-    return {}
+    from evaluation.judge import aggrega, giudica
+
+    if not config_modulo().GEMINI_API_KEY:
+        logger.warning("Suite 'answers' saltata: richiede una chiave API attiva.")
+        return {}
+
+    cases = stratified_sample(load_ticket_cases(), sample) if sample else load_ticket_cases()
+    giudizi = []
+    per_caso: List[Dict[str, Any]] = []
+
+    for c in cases:
+        esito = run_system(c["query"], exclude_sources=[c["case_id"]])
+        g = giudica(c["case_id"], c["query"], esito["answer"],
+                    esito["kb_docs"], esito["kb_tickets"])
+        if g is None:
+            continue
+        giudizi.append(g)
+        per_caso.append({
+            "ticket_id": c["case_id"],
+            "subcategory": c["subcategory"],
+            "escalated": esito["escalated"],
+            "groundedness": g.groundedness,
+            "relevance": g.relevance,
+            "policy_compliance": g.policy_compliance,
+            "policy_violation": g.policy_violation or "",
+            "reasoning": g.reasoning,
+            "answer": esito["answer"][:200],
+        })
+
+    _log_table(per_caso, "answers_per_case")
+    return aggrega(giudizi, totale_casi=len(cases))
+
+
+def config_modulo():
+    from app import config
+    return config
 
 
 # ==========================================================================
@@ -318,21 +469,30 @@ def log_to_mlflow(metrics: Dict[str, float], suite: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluation del sistema di help desk")
-    parser.add_argument("--suite", choices=["escalation", "retrieval", "answers", "all"],
-                        default="all")
+    parser.add_argument(
+        "--suite",
+        choices=["retrieval", "escalation-a", "escalation-b", "escalation", "answers", "all"],
+        default="all",
+        help="retrieval | escalation-a (ticket storici) | escalation-b (casi scritti a mano) "
+             "| escalation (entrambe) | answers | all",
+    )
     parser.add_argument("--k", type=int, default=3, help="top-k per le metriche di retrieval")
     parser.add_argument("--sample", type=int, default=0,
                         help="valuta solo N ticket, campionati in modo stratificato (0 = tutti)")
+    parser.add_argument("--judge-sample", type=int, default=20,
+                        help="quanti casi far giudicare dall'LLM nella suite 'answers'")
     parser.add_argument("--no-mlflow", action="store_true", help="non registrare su MLflow")
     args = parser.parse_args()
 
     groups = []
-    if args.suite in ("escalation", "all"):
-        groups.append(run_escalation_suite())
     if args.suite in ("retrieval", "all"):
         groups.append(run_retrieval_suite(k=args.k, sample=args.sample))
+    if args.suite in ("escalation-a", "escalation", "all"):
+        groups.append(run_escalation_suite_a(sample=args.sample))
+    if args.suite in ("escalation-b", "escalation", "all"):
+        groups.append(run_escalation_suite_b())
     if args.suite in ("answers", "all"):
-        groups.append(run_answer_quality_suite())
+        groups.append(run_answer_quality_suite(sample=args.judge_sample))
 
     metrics = flatten_metrics(*groups)
 

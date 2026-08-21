@@ -21,7 +21,7 @@ services:
 
   # ------------------------------------------------------------------ Qdrant
   qdrant:
-    image: qdrant/qdrant:v1.12.4
+    image: qdrant/qdrant:v1.18
     restart: unless-stopped
     ports:
       # Esposto sull'host solo per ispezione manuale (dashboard su /dashboard).
