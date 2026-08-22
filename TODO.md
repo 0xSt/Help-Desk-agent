@@ -113,6 +113,14 @@ Resta aperto:
 - [ ] **Eseguire l'evaluation vera con Gemini attivo.** Tutti i numeri
       raccolti finora vengono dalla modalità mock e non dicono nulla sul
       sistema reale.
+- [ ] **Rimisurare dopo la modifica al prompt "risolvi in un messaggio".**
+      Chiedere risposte autosufficienti cambia il testo generato e può
+      spostare la confidenza dichiarata, quindi tocca proprio i segnali su cui
+      si regge l'escalation §4. Le suite vanno rieseguite prima e dopo la
+      modifica per misurarne l'effetto invece di supporlo. Il giudizio di
+      groundedness è l'indicatore da sorvegliare: il rischio specifico di
+      questo prompt è che il modello colmi i vuoti inventando procedura pur di
+      non fare domande.
 - [ ] **Confrontare un giudice diverso dal modello valutato.** `JUDGE_MODEL`
       è configurabile apposta: un giudice che condivide con l'esaminato gli
       stessi punti ciechi tende a non vederne gli errori.
