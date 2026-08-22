@@ -25,10 +25,14 @@ nessun framework/build step).
 
 ## Avvio con Docker Compose (modalità consigliata)
 
-```bash
-cp .env.example .env        # e valorizza GEMINI_API_KEY
+```
 docker compose up --build
 ```
+
+Prima serve il file di configurazione: copia `.env.example` in `.env` e
+valorizza `GEMINI_API_KEY`. Il comando di copia dipende dalla shell —
+`cp .env.example .env` su macOS e Linux, `copy .env.example .env` sul prompt
+dei comandi di Windows.
 
 | Servizio | URL | Ruolo |
 |---|---|---|
@@ -69,7 +73,7 @@ sviluppo locale, dove è FastAPI a servire tutto.
 
 ## Avvio locale senza Docker
 
-```bash
+```
 uv sync                     # oppure: pip install -r requirements.txt
 uv run uvicorn app.main:app --reload
 ```
@@ -79,7 +83,8 @@ uv run uvicorn app.main:app --reload
 
 In locale FastAPI serve anche le pagine statiche e `app/retrieval.py`
 indicizza automaticamente all'import (`AUTO_INDEX=true` di default), quindi
-non serve lanciare l'ingestion a mano. Qdrant gira in modalità *embedded*
+non serve lanciare l'ingestion a mano. Il file `.env` viene letto
+automaticamente: nessuna variabile da esportare a mano, su nessuna shell. Qdrant gira in modalità *embedded*
 (`QDRANT_PATH`, un indice su disco) e MLflow scrive su `./mlruns`: nessun
 servizio esterno da avviare.
 
@@ -438,18 +443,28 @@ docker compose run --rm backend python -m evaluation.calibrate_thresholds
 docker compose run --rm backend python -m evaluation.run_evaluation --suite all --sample 30
 ```
 
-**Sull'host** (comodo per iterare, richiede l'ambiente Python):
+**Sull'host** (comodo per iterare). Il file `.env` viene letto
+automaticamente da `app/config.py`, quindi non serve esportare nulla a mano —
+basta aggiungerci le tre righe che indirizzano ai servizi in container:
 
-```bash
-uv sync
-export $(grep -v '^#' .env | grep -v '^$' | xargs)   # il .env NON viene letto da solo
-export QDRANT_URL=http://localhost:6333
-export MLFLOW_TRACKING_URI=http://localhost:5000
-export AUTO_INDEX=false
-
-python -m evaluation.calibrate_thresholds
-python -m evaluation.run_evaluation --suite all --sample 30
 ```
+QDRANT_URL=http://localhost:6333
+MLFLOW_TRACKING_URI=http://localhost:5000
+AUTO_INDEX=false
+```
+
+Poi, identico su Windows, macOS e Linux:
+
+```
+uv sync
+uv run python -m evaluation.calibrate_thresholds
+uv run python -m evaluation.run_evaluation --suite all --sample 30
+```
+
+> Quelle tre righe nel `.env` non disturbano i container: nel compose
+> `QDRANT_URL` e `AUTO_INDEX` stanno in `environment:`, che ha la precedenza
+> su `env_file:`, quindi dentro Docker continuano a valere i valori giusti
+> (`http://qdrant:6333`).
 
 ### Opzioni
 
