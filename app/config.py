@@ -12,6 +12,53 @@ d'ambiente, così un container può essere avviato con soglie diverse senza
 ricostruire l'immagine.
 """
 import os
+from pathlib import Path
+
+
+def _load_dotenv() -> None:
+    """
+    Carica il file `.env` dalla root del progetto, se esiste.
+
+    Perché serve: fuori da Docker nessuno popola l'ambiente al posto nostro.
+    Prima di questa funzione occorreva esportare le variabili a mano, con un
+    comando diverso a seconda della shell (`export ...` su bash, `set ...` sul
+    prompt di Windows, `$env:...` su PowerShell) — una fonte di errori
+    sproporzionata rispetto al problema, e con un sintomo insidioso: senza
+    chiave il sistema non si ferma, ricade sui mock e sembra solo "di bassa
+    qualità".
+
+    Due regole:
+    - **l'ambiente vince sul file**: una variabile già impostata non viene
+      mai sovrascritta. In Docker Compose è `env_file`/`environment` a
+      popolare l'ambiente, quindi qui il file non c'è nemmeno (è escluso dal
+      contesto di build) e la funzione non fa nulla;
+    - parsing minimale e senza dipendenze: `CHIAVE=valore`, commenti con `#`,
+      virgolette rimosse, righe malformate ignorate in silenzio.
+    """
+    percorso = Path(__file__).resolve().parent.parent / ".env"
+    if not percorso.is_file():
+        return
+    try:
+        for riga in percorso.read_text(encoding="utf-8").splitlines():
+            riga = riga.strip()
+            if not riga or riga.startswith("#") or "=" not in riga:
+                continue
+            chiave, _, valore = riga.partition("=")
+            chiave = chiave.strip()
+            # Tollera la forma `export CHIAVE=valore`, comune nei .env
+            # copiati da guide scritte per bash.
+            if chiave.startswith("export "):
+                chiave = chiave[len("export "):].strip()
+            valore = valore.strip().strip('"').strip("'")
+            if chiave and chiave not in os.environ:
+                os.environ[chiave] = valore
+    except OSError:
+        # Un .env illeggibile non deve impedire l'avvio: le variabili
+        # potrebbero comunque arrivare dall'ambiente.
+        pass
+
+
+_load_dotenv()
 
 
 def _env_str(name: str, default: str) -> str:

@@ -1,0 +1,140 @@
+@startuml classi_astratto
+' ===========================================================================
+' Diagramma delle classi — vista astratta (livello sottosistemi)
+'
+' Mostra COME È ORGANIZZATO il backend e quali responsabilità ha ciascun
+' sottosistema, omettendo deliberatamente attributi e firme: quelli stanno
+' nella vista dettagliata (classi_dettaglio.puml).
+'
+' Il messaggio che questo diagramma deve far passare è la separazione fra i
+' TRE STORE. Sembrano ridondanti e non lo sono: rispondono a tre domande
+' diverse, e la loro fusione sarebbe l'errore architetturale più facile da
+' commettere in questo sistema.
+'
+' Rigenerazione:
+'   java -jar plantuml.jar -tpng -tsvg -o . docs/diagrams/classi_astratto.puml
+' ===========================================================================
+
+title Architettura del backend — vista per sottosistemi
+
+skinparam backgroundColor #FAFAF9
+skinparam roundCorner 6
+skinparam shadowing false
+skinparam linetype ortho
+
+skinparam package {
+  BorderColor #6B6862
+  BackgroundColor #FFFFFF
+  FontStyle bold
+}
+skinparam class {
+  BorderColor #3B4A6B
+  BackgroundColor #EEF1F7
+  FontColor #1C1B19
+  ArrowColor #6B6862
+}
+skinparam note {
+  BackgroundColor #FDF3E0
+  BorderColor #E3AB3F
+}
+
+package "Interfaccia HTTP" {
+  class "main\n(FastAPI)" as API << (M,#A8710A) modulo >> {
+    Espone gli endpoint REST
+    e serve le due interfacce
+  }
+  class "schemas" as Schemas << (M,#A8710A) modulo >> {
+    Contratto dati fra
+    backend e frontend
+  }
+}
+
+package "Orchestrazione" {
+  class "graph\n(LangGraph)" as Graph << (M,#A8710A) modulo >> {
+    Definisce il workflow
+    e i suoi nodi
+  }
+  class AgentState << stato >> {
+    Stato condiviso
+    fra i nodi
+  }
+}
+
+package "Ragionamento" {
+  class "llm" as LLM << (M,#A8710A) modulo >> {
+    Genera la bozza
+    e OSSERVA il ticket
+  }
+  class "escalation" as Esc << (M,#A8710A) modulo >> {
+    DECIDE l'escalation
+    applicando le policy
+  }
+}
+
+package "Conoscenza" {
+  class "retrieval" as Ret << (M,#A8710A) modulo >> {
+    Indicizza e interroga
+    le due knowledge base
+  }
+}
+
+package "Stato applicativo — tre store distinti" {
+  class "Checkpointer\n(LangGraph)" as CP << store >> {
+    A che punto è l'ESECUZIONE
+    del grafo per un thread
+  }
+  class TicketStore << store >> {
+    Quali TICKET attendono
+    un operatore
+  }
+  class ThreadRegistry << store >> {
+    Quali CONVERSAZIONI
+    sono aperte
+  }
+}
+
+package "Osservabilità" {
+  class "tracing\n(MLflow)" as Tr << (M,#A8710A) modulo >>
+  class "config" as Cfg << (M,#A8710A) modulo >>
+}
+
+API ..> Schemas
+API --> Graph : invoke / resume
+API --> TicketStore
+API --> ThreadRegistry
+API ..> Tr
+
+Graph *-- AgentState
+Graph --> Ret : recupera contesto
+Graph --> LLM : genera e osserva
+Graph --> Esc : decide
+Graph --> CP : persiste lo stato
+
+Esc ..> LLM : usa i segnali\nprodotti da
+Ret ..> Cfg
+LLM ..> Cfg
+Esc ..> Cfg
+
+note bottom of ThreadRegistry
+  **Perché tre store e non uno.**
+  Il checkpointer sa riprendere un'esecuzione sospesa,
+  ma non risponde a "dammi tutti i ticket aperti":
+  non è pensato per essere interrogato così.
+  Il TicketStore è il record di business, il
+  ThreadRegistry il ciclo di vita della conversazione.
+  Una conversazione può esistere senza essere mai
+  diventata un ticket, e un ticket risolto non chiude
+  la conversazione: sono cicli di vita indipendenti.
+end note
+
+note right of Esc
+  **Il modello osserva, il codice decide.**
+  `llm` produce segnali strutturati, `escalation`
+  applica su di essi regole deterministiche.
+  POL-006 §3 impone certe escalation
+  "regardless of the AI agent's confidence level":
+  una regola così non è implementabile se è il
+  modello stesso a decidere.
+end note
+
+@enduml

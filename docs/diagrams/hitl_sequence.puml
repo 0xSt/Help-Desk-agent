@@ -1,0 +1,155 @@
+@startuml hitl_sequence
+' ===========================================================================
+' Diagramma di sequenza — flusso human-in-the-loop
+'
+' Mostra il meccanismo centrale del sistema: come un ticket che richiede
+' l'intervento di un operatore attraversi DUE richieste HTTP indipendenti,
+' separate da un intervallo di durata arbitraria, senza che alcun processo
+' resti in attesa nel frattempo.
+'
+' Rigenerazione:
+'   java -jar plantuml.jar docs/diagrams/hitl_sequence.puml
+' ===========================================================================
+
+title Flusso human-in-the-loop — dall'apertura del ticket alla risposta verificata
+
+skinparam backgroundColor #FAFAF9
+skinparam sequenceMessageAlign left
+skinparam maxMessageSize 220
+skinparam roundCorner 6
+skinparam BoxPadding 10
+
+skinparam sequence {
+  ArrowColor #3B4A6B
+  LifeLineBorderColor #6B6862
+  LifeLineBackgroundColor #E4E2DD
+  ParticipantBorderColor #3B4A6B
+  ParticipantBackgroundColor #EEF1F7
+  ParticipantFontStyle bold
+  ActorBorderColor #1C1B19
+  ActorBackgroundColor #FFFFFF
+  GroupBorderColor #A8710A
+  GroupHeaderFontColor #A8710A
+}
+
+actor "Richiedente" as User
+participant "Frontend\n(nginx)" as FE
+participant "Backend\n(FastAPI)" as BE
+database "TicketStore" as TS
+participant "Grafo\n(LangGraph)" as G
+database "Checkpointer" as CP
+participant "Qdrant" as QD
+participant "Gemini" as LLM
+actor "Operatore" as Agent
+
+== 1. Apertura del ticket ==
+
+User -> FE : descrive il problema
+FE -> BE : POST /api/chat\n{thread_id?, message}
+note right of FE
+  nginx serve le pagine statiche e inoltra
+  /api/* al backend: browser e pagine vedono
+  una sola origine, quindi nessun CORS.
+end note
+
+BE -> BE : verifica che il thread non sia chiuso
+BE -> TS : thread_registry.touch(thread_id)
+BE -> G : invoke({user_query}, thread_id)
+activate G
+
+par recupero in parallelo dalle due KB
+  G -> QD : query kb_docs (RETRIEVAL_QUERY)
+  QD --> G : k passaggi di policy + score
+also
+  G -> QD : query kb_tickets
+  QD --> G : k ticket simili + score
+end
+note over G
+  Fan-out/fan-in: il nodo `agent` parte solo
+  quando ENTRAMBI i retrieval hanno scritto
+  la propria chiave di stato.
+end note
+
+G -> LLM : genera bozza + confidenza + segnali\n(structured output)
+LLM --> G : DraftAnswer
+
+G -> G : decide_escalation\n(regole POL-006 su segnali,\nconfidenza e score di retrieval)
+G -> CP : salva lo stato del super-step
+deactivate G
+
+== 2. Biforcazione sulla decisione ==
+
+alt escalate = false — l'agente risolve da solo
+
+  G -> G : finalize
+  G -> CP : salva stato finale
+  BE --> FE : 200 {status: "completed", answer}
+  FE --> User : risposta dell'agente
+
+else escalate = true — serve un operatore
+
+  G -> G : human_review
+  note right of G
+    interrupt() sospende QUI l'esecuzione:
+    non è un'attesa bloccante, il grafo
+    esce e lo stato resta nel checkpointer.
+  end note
+  G -> CP : registra il nodo sospeso\n+ payload dell'interrupt
+  G --> BE : risultato con chiave __interrupt__
+
+  BE -> TS : ticket_store.escalate(...)\nil ticket entra in coda
+  BE --> FE : 200 {status: "awaiting_review",\ndraft_answer, triggers}
+  FE --> User : "il ticket è stato inoltrato a un operatore"
+
+  ...la prima richiesta HTTP è CONCLUSA...
+  ...nessun processo in attesa: lo stato vive nel checkpointer...
+
+  == 3. Intervento dell'operatore (richiesta HTTP separata) ==
+
+  Agent -> FE : apre la console /agent
+  FE -> BE : GET /api/tickets
+  BE -> TS : ticket_store.pending()
+  TS --> BE : coda dei ticket in attesa
+  BE --> FE : elenco ticket
+
+  Agent -> FE : seleziona un ticket
+  FE -> BE : GET /api/state/{thread_id}
+  BE -> CP : graph.get_state()
+  CP --> BE : cronologia + payload dell'interrupt
+  BE --> FE : bozza, confidenza, trigger scattati\ncon la clausola di policy di ciascuno
+
+  Agent -> Agent : legge il contesto,\ncorregge o approva la bozza
+  Agent -> FE : invia la risposta definitiva
+  FE -> BE : POST /api/review\n{thread_id, edited_answer}
+
+  BE -> BE : verifica che ci sia\nun interrupt pendente
+  BE -> G : invoke(Command(resume=edited_answer), thread_id)
+  activate G
+  G -> CP : ricarica lo stato sospeso
+  note right of G
+    Il nodo human_review viene RI-ESEGUITO
+    dall'inizio: interrupt() questa volta non
+    sospende, restituisce il valore passato
+    in resume=.
+  end note
+  G -> G : human_review → final_answer\n+ reviewed_by_human = true
+  G -> G : finalize
+  G -> CP : salva stato finale
+  deactivate G
+
+  BE -> TS : ticket_store.resolve(...)\nil ticket esce dalla coda
+  BE --> FE : 200 {status: "completed"}
+
+  == 4. Consegna al richiedente ==
+
+  loop ogni 3 secondi, finché status != "completed"
+    FE -> BE : GET /api/state/{thread_id}
+    BE -> CP : graph.get_state()
+    CP --> BE : stato corrente
+    BE --> FE : {status, answer, reviewed_by_human}
+  end
+  FE --> User : risposta, marcata\n"✓ verified by an agent"
+
+end
+
+@enduml

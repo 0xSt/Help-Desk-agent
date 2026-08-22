@@ -25,10 +25,14 @@ nessun framework/build step).
 
 ## Avvio con Docker Compose (modalità consigliata)
 
-```bash
-cp .env.example .env        # e valorizza GEMINI_API_KEY
+```
 docker compose up --build
 ```
+
+Prima serve il file di configurazione: copia `.env.example` in `.env` e
+valorizza `GEMINI_API_KEY`. Il comando di copia dipende dalla shell —
+`cp .env.example .env` su macOS e Linux, `copy .env.example .env` sul prompt
+dei comandi di Windows.
 
 | Servizio | URL | Ruolo |
 |---|---|---|
@@ -69,7 +73,7 @@ sviluppo locale, dove è FastAPI a servire tutto.
 
 ## Avvio locale senza Docker
 
-```bash
+```
 uv sync                     # oppure: pip install -r requirements.txt
 uv run uvicorn app.main:app --reload
 ```
@@ -79,7 +83,8 @@ uv run uvicorn app.main:app --reload
 
 In locale FastAPI serve anche le pagine statiche e `app/retrieval.py`
 indicizza automaticamente all'import (`AUTO_INDEX=true` di default), quindi
-non serve lanciare l'ingestion a mano. Qdrant gira in modalità *embedded*
+non serve lanciare l'ingestion a mano. Il file `.env` viene letto
+automaticamente: nessuna variabile da esportare a mano, su nessuna shell. Qdrant gira in modalità *embedded*
 (`QDRANT_PATH`, un indice su disco) e MLflow scrive su `./mlruns`: nessun
 servizio esterno da avviare.
 
@@ -138,6 +143,144 @@ uv sync --extra analysis && uv run python analysis/eda.py
 - **`human_review`** — nodo HITL: `interrupt()` sospende il grafo, il ticket
   entra nella coda dell'operatore con allegato l'elenco completo dei trigger.
 - **`finalize`** — consolida la risposta definitiva e aggiorna la cronologia.
+
+### Diagramma dei componenti
+
+![Architettura di deployment](docs/diagrams/componenti.png)
+
+I quattro servizi containerizzati con le interfacce che espongono e le
+dipendenze di avvio dichiarate nel compose. Due cose che il diagramma chiarisce
+meglio di una descrizione a parole:
+
+- **il browser parla con un solo servizio.** nginx serve le pagine e inoltra
+  `/api/*` al backend, quindi non esiste traffico cross-origin: niente CORS da
+  configurare, niente URL del backend da iniettare nel JavaScript, e il codice
+  lato client resta identico a quello che gira in sviluppo locale.
+- **`ingestion` è un job, non un servizio.** Stessa immagine del backend con un
+  comando diverso: popola Qdrant e termina. Il backend non parte finché non è
+  uscito con successo (`service_completed_successfully`), altrimenti le prime
+  richieste troverebbero collection vuote e ogni ticket verrebbe escalato per
+  mancanza di appigli.
+
+È anche il diagramma in cui si vede il limite noto più rilevante: lo stato del
+backend (checkpointer, ticket, thread) vive **in memoria di processo** e si
+perde al riavvio del container.
+
+### Diagramma di attività — la decisione di escalation
+
+![Decisione di escalation](docs/diagrams/attivita_escalation.png)
+
+Le swimlane sono la ragione d'essere di questo diagramma: rendono verificabile
+a colpo d'occhio che il modello linguistico occupa una fascia sola e stretta —
+**genera la bozza, dichiara una confidenza, estrae i segnali** — mentre la
+decisione di coinvolgere un umano avviene interamente nella corsia del motore
+di regole. È l'affermazione "il modello osserva, il codice decide" resa
+visibile invece che dichiarata.
+
+Le tre partizioni corrispondono alle tre famiglie di segnali, valutate in
+quest'ordine: mandatori (POL-006 §3, POL-008 §5), confidenza (§4), retrieval
+(§4 e §6). L'ordine conta due volte: i mandatori sono **non aggirabili** da una
+confidenza alta, e `reason()` mostra all'operatore il motivo più cogente per
+primo.
+
+### Diagrammi delle classi
+
+Due viste dello stesso backend, con livelli di dettaglio diversi perché
+rispondono a domande diverse.
+
+![Vista per sottosistemi](docs/diagrams/classi_astratto.png)
+
+La **vista astratta** mostra come è organizzato il backend e quali
+responsabilità ha ciascun sottosistema, omettendo di proposito attributi e
+firme. Il messaggio che deve passare è la separazione fra i **tre store**:
+sembrano ridondanti e non lo sono. Il checkpointer sa riprendere
+un'esecuzione sospesa ma non risponde a "dammi tutti i ticket aperti"; il
+`TicketStore` è il record di business; il `ThreadRegistry` è il ciclo di vita
+della conversazione. Una conversazione può esistere senza diventare mai un
+ticket, e risolvere un ticket non chiude la conversazione: fonderli sarebbe
+l'errore architetturale più facile da commettere qui.
+
+Si vede anche la separazione fra `llm` (osserva) ed `escalation` (decide).
+
+![Vista dettagliata](docs/diagrams/classi_dettaglio.png)
+
+La **vista dettagliata** riporta attributi e firme delle strutture dati che
+attraversano il sistema, presi dal codice. Tre punti da notare:
+
+- `TicketSignals` è lo schema passato a Gemini come `response_schema`, quindi
+  la risposta è garantita conforme. **Nessuno dei suoi campi dice "escala"**:
+  il modello riporta ciò che il ticket afferma, la decisione è di
+  `escalation.decide()`.
+- `EscalationDecision` contiene una **lista di `Trigger`**, non un booleano.
+  Serve tre volte: l'operatore vede tutti i motivi con la clausola di
+  ciascuno, l'evaluation misura l'accuratezza per singolo segnale, e in debug
+  si vede quale regola ha deciso.
+- `AgentState` è diviso per fase (ingresso, retrieval, agente, decisione,
+  esito): rende visibile quale nodo popola cosa.
+
+Restano fuori i moduli senza stato (`retrieval`, `tracing`, `config`), che
+compaiono nella vista astratta, e i modelli di richiesta/risposta HTTP, che
+sono contratto di trasporto e non logica di dominio.
+
+### Diagrammi dei casi d'uso
+
+Due diagrammi separati, perché il sistema ha due insiemi di attori con
+frequenze d'uso e cicli di vita diversi: chi lo **usa** a runtime e chi lo
+**gestisce e valuta**. Mescolarli avrebbe prodotto un unico diagramma
+illeggibile in cui le due prospettive si confondono.
+
+![Casi d'uso operativi](docs/diagrams/use_cases_operativi.png)
+
+Nel diagramma operativo la relazione da guardare è
+`UC-05 ..> UC-04 : «extend»`. L'escalation è modellata come **estensione** e
+non come inclusione perché non avviene sempre: dipende dai trigger valutati a
+runtime. Un `«include»` affermerebbe che ogni ticket passa da un operatore,
+cioè l'opposto dell'obiettivo del sistema.
+
+Due cose che il diagramma dice e che vale la pena notare: il richiedente
+**non** modifica la bozza (può solo consultarne l'esito — la revisione è
+prerogativa esclusiva dell'operatore, ed è ciò che distingue questo flusso da
+una normale chat assistita); e UC-07 non ha alcuna relazione UML con UC-05,
+perché sono casi d'uso di attori diversi, separati nel tempo e raccordati
+soltanto dalla coda dei ticket.
+
+![Casi d'uso di amministrazione](docs/diagrams/use_cases_amministrazione.png)
+
+Nel diagramma amministrativo le tre suite di valutazione sono modellate come
+**generalizzazioni** di UC-13, non come inclusioni: sono modi alternativi di
+raggiungere lo stesso obiettivo, non parti obbligatorie di esso. E UC-12
+(calibrazione) precede UC-13 e non lo segue, perché le soglie vanno tarate su
+dati privi di etichette: tararle sui casi di test renderebbe la valutazione
+successiva priva di significato.
+
+### Diagramma di sequenza del flusso HITL
+
+![Flusso human-in-the-loop](docs/diagrams/hitl_sequence.png)
+
+Il diagramma (sorgente PlantUML in `docs/diagrams/hitl_sequence.puml`) mostra
+il meccanismo centrale del sistema: un ticket escalato attraversa **due
+richieste HTTP indipendenti**, separate da un intervallo di durata arbitraria,
+senza che alcun processo resti in attesa nel frattempo.
+
+Le tre cose da guardare:
+
+1. `interrupt()` nel nodo `human_review` **non è un'attesa bloccante**: il
+   grafo esce, lo stato resta nel checkpointer e la prima richiesta HTTP si
+   conclude normalmente.
+2. Tra la fine di `POST /api/chat` e l'arrivo di `POST /api/review` il sistema
+   non tiene niente in memoria di processo per quel ticket, se non i record di
+   lettura in `TicketStore`. È ciò che permette all'operatore di intervenire
+   ore dopo.
+3. Alla ripresa, il nodo `human_review` viene **ri-eseguito dall'inizio**:
+   questa volta `interrupt()` non sospende ma restituisce il valore passato in
+   `Command(resume=...)`. Da qui il vincolo di non mettere effetti collaterali
+   prima di quella chiamata.
+
+Per rigenerarlo dopo una modifica:
+
+```bash
+java -jar plantuml.jar -tpng -tsvg -o . docs/diagrams/*.puml
+```
 
 ## Logica di escalation multisegnale
 
@@ -438,18 +581,28 @@ docker compose run --rm backend python -m evaluation.calibrate_thresholds
 docker compose run --rm backend python -m evaluation.run_evaluation --suite all --sample 30
 ```
 
-**Sull'host** (comodo per iterare, richiede l'ambiente Python):
+**Sull'host** (comodo per iterare). Il file `.env` viene letto
+automaticamente da `app/config.py`, quindi non serve esportare nulla a mano —
+basta aggiungerci le tre righe che indirizzano ai servizi in container:
 
-```bash
-uv sync
-export $(grep -v '^#' .env | grep -v '^$' | xargs)   # il .env NON viene letto da solo
-export QDRANT_URL=http://localhost:6333
-export MLFLOW_TRACKING_URI=http://localhost:5000
-export AUTO_INDEX=false
-
-python -m evaluation.calibrate_thresholds
-python -m evaluation.run_evaluation --suite all --sample 30
 ```
+QDRANT_URL=http://localhost:6333
+MLFLOW_TRACKING_URI=http://localhost:5000
+AUTO_INDEX=false
+```
+
+Poi, identico su Windows, macOS e Linux:
+
+```
+uv sync
+uv run python -m evaluation.calibrate_thresholds
+uv run python -m evaluation.run_evaluation --suite all --sample 30
+```
+
+> Quelle tre righe nel `.env` non disturbano i container: nel compose
+> `QDRANT_URL` e `AUTO_INDEX` stanno in `environment:`, che ha la precedenza
+> su `env_file:`, quindi dentro Docker continuano a valere i valori giusti
+> (`http://qdrant:6333`).
 
 ### Opzioni
 

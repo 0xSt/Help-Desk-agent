@@ -113,6 +113,14 @@ Resta aperto:
 - [ ] **Eseguire l'evaluation vera con Gemini attivo.** Tutti i numeri
       raccolti finora vengono dalla modalità mock e non dicono nulla sul
       sistema reale.
+- [ ] **Rimisurare dopo la modifica al prompt "risolvi in un messaggio".**
+      Chiedere risposte autosufficienti cambia il testo generato e può
+      spostare la confidenza dichiarata, quindi tocca proprio i segnali su cui
+      si regge l'escalation §4. Le suite vanno rieseguite prima e dopo la
+      modifica per misurarne l'effetto invece di supporlo. Il giudizio di
+      groundedness è l'indicatore da sorvegliare: il rischio specifico di
+      questo prompt è che il modello colmi i vuoti inventando procedura pur di
+      non fare domande.
 - [ ] **Confrontare un giudice diverso dal modello valutato.** `JUDGE_MODEL`
       è configurabile apposta: un giudice che condivide con l'esaminato gli
       stessi punti ciechi tende a non vederne gli errori.
@@ -134,6 +142,27 @@ negativi).
       insieme alle metriche, così i run sono confrontabili a posteriori.
 
 ---
+
+## P2 — Documentazione per l'esame
+
+- [x] **Diagramma di sequenza del flusso HITL** — `docs/diagrams/hitl_sequence.puml`,
+      sorgente PlantUML versionato più PNG e SVG renderizzati.
+- [x] **Diagrammi dei casi d'uso** — due diagrammi separati per i due insiemi
+      di attori: `use_cases_operativi.puml` (Richiedente, Operatore) e
+      `use_cases_amministrazione.puml` (Manutentore).
+- [x] **Diagramma dei componenti** — `componenti.puml`, quattro servizi,
+      interfacce e dipendenze di avvio.
+- [x] **Diagrammi delle classi** — due viste: `classi_astratto.puml`
+      (sottosistemi e responsabilità, con la separazione fra i tre store) e
+      `classi_dettaglio.puml` (attributi e firme delle strutture di dominio).
+- [x] **Diagramma di attività** — `attivita_escalation.puml`, con swimlane
+      modello / motore di regole / operatore.
+
+Tutti e sei i diagrammi UML sono in `docs/diagrams/` come sorgente PlantUML
+più PNG e SVG. Resta il **documento di specifica dei requisiti**.
+- [ ] **Documento di specifica dei requisiti** (IEEE 830 / ISO 29148) con
+      matrice di tracciabilità requisito → policy di origine → componente →
+      test che lo verifica.
 
 ## P2 — Rifiniture
 
