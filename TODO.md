@@ -143,6 +143,26 @@ negativi).
 
 ---
 
+## P2 — Documentazione per l'esame
+
+- [x] **Diagramma di sequenza del flusso HITL** — `docs/diagrams/hitl_sequence.puml`,
+      sorgente PlantUML versionato più PNG e SVG renderizzati.
+- [ ] **Diagramma dei casi d'uso** — due attori (Richiedente, Operatore); la
+      revisione della risposta va modellata come `«extend»` di "Elabora
+      richiesta", perché esiste solo in conseguenza di un'escalation.
+- [ ] **Diagramma dei componenti** — i quattro servizi e le interfacce fra
+      loro; è dove si vede il reverse proxy.
+- [ ] **Diagramma delle classi** — limitato ai sottosistemi che contano:
+      `AgentState`, `TicketSignals`, `EscalationDecision`/`Trigger`,
+      `TicketStore`/`Ticket`, `ThreadRegistry`/`ThreadInfo`. Da far emergere
+      la separazione fra i tre store (checkpointer, ticket, thread).
+- [ ] **Diagramma di attività** — la logica di `decide_escalation`, con
+      swimlane modello / motore di regole per rendere visibile il principio
+      "il modello osserva, il codice decide".
+- [ ] **Documento di specifica dei requisiti** (IEEE 830 / ISO 29148) con
+      matrice di tracciabilità requisito → policy di origine → componente →
+      test che lo verifica.
+
 ## P2 — Rifiniture
 
 - [ ] **Pubblicare su GitHub** — il repository locale è pronto con la storia

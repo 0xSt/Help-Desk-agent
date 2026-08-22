@@ -144,6 +144,35 @@ uv sync --extra analysis && uv run python analysis/eda.py
   entra nella coda dell'operatore con allegato l'elenco completo dei trigger.
 - **`finalize`** — consolida la risposta definitiva e aggiorna la cronologia.
 
+### Diagramma di sequenza del flusso HITL
+
+![Flusso human-in-the-loop](docs/diagrams/hitl_sequence.png)
+
+Il diagramma (sorgente PlantUML in `docs/diagrams/hitl_sequence.puml`) mostra
+il meccanismo centrale del sistema: un ticket escalato attraversa **due
+richieste HTTP indipendenti**, separate da un intervallo di durata arbitraria,
+senza che alcun processo resti in attesa nel frattempo.
+
+Le tre cose da guardare:
+
+1. `interrupt()` nel nodo `human_review` **non è un'attesa bloccante**: il
+   grafo esce, lo stato resta nel checkpointer e la prima richiesta HTTP si
+   conclude normalmente.
+2. Tra la fine di `POST /api/chat` e l'arrivo di `POST /api/review` il sistema
+   non tiene niente in memoria di processo per quel ticket, se non i record di
+   lettura in `TicketStore`. È ciò che permette all'operatore di intervenire
+   ore dopo.
+3. Alla ripresa, il nodo `human_review` viene **ri-eseguito dall'inizio**:
+   questa volta `interrupt()` non sospende ma restituisce il valore passato in
+   `Command(resume=...)`. Da qui il vincolo di non mettere effetti collaterali
+   prima di quella chiamata.
+
+Per rigenerarlo dopo una modifica:
+
+```bash
+java -jar plantuml.jar -tpng -tsvg -o . docs/diagrams/hitl_sequence.puml
+```
+
 ## Logica di escalation multisegnale
 
 `app/escalation.py`. Principio di progetto: **il modello osserva, il codice
