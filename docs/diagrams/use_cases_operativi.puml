@@ -59,7 +59,6 @@ rectangle "Sistema di help desk" {
 }
 
 actor "Servizio LLM\n(Gemini)" as LLM
-actor "Base di conoscenza\n(Qdrant)" as KB
 
 ' --- attore primario: il richiedente ---
 User --> UC01
@@ -78,9 +77,8 @@ Agent --> UC06
 Agent --> UC07
 Agent --> UC08
 
-' --- attori secondari, invocati dal sistema ---
+ ' --- attore secondario: l'unico servizio realmente esterno ---
 UC04 --> LLM
-UC04 --> KB
 
 note bottom of UC05
   Modellata come <<extend>> e non come
@@ -101,6 +99,14 @@ note right of UC07
   perché lo stato dell'esecuzione è
   persistito e nessun processo resta
   in attesa.
+end note
+
+note bottom of UC04
+  Il database vettoriale e il servizio di
+  tracciamento **non** compaiono come attori:
+  sono parte del sistema, come mostra il
+  diagramma dei componenti. Resta attore
+  secondario il solo servizio di terze parti.
 end note
 
 note right of UC03

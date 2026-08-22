@@ -158,8 +158,12 @@ negativi).
 - [x] **Diagramma di attività** — `attivita_escalation.puml`, con swimlane
       modello / motore di regole / operatore.
 
-Tutti e sei i diagrammi UML sono in `docs/diagrams/` come sorgente PlantUML
-più PNG e SVG. Resta il **documento di specifica dei requisiti**.
+Tutti e sette i diagrammi UML sono in `docs/diagrams/` come sorgente PlantUML
+più PNG e SVG.
+
+Revisione di correttezza eseguita: corrette due incoerenze di modellazione
+(confine di sistema disallineato fra casi d'uso e componenti; dipendenza
+invertita fra `TicketSignals` ed `EscalationDecision`).
 - [x] **Documento di specifica dei requisiti** — `docs/SRS.md`, 71 requisiti
       funzionali e 7 non funzionali, con matrice di tracciabilità. PDF
       generabile con:
