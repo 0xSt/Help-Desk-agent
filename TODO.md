@@ -150,14 +150,16 @@ negativi).
 - [x] **Diagrammi dei casi d'uso** — due diagrammi separati per i due insiemi
       di attori: `use_cases_operativi.puml` (Richiedente, Operatore) e
       `use_cases_amministrazione.puml` (Manutentore).
-- [ ] **Diagramma dei componenti** — i quattro servizi e le interfacce fra
-      loro; è dove si vede il reverse proxy.
+- [x] **Diagramma dei componenti** — `componenti.puml`, quattro servizi,
+      interfacce e dipendenze di avvio.
 - [x] **Diagrammi delle classi** — due viste: `classi_astratto.puml`
       (sottosistemi e responsabilità, con la separazione fra i tre store) e
       `classi_dettaglio.puml` (attributi e firme delle strutture di dominio).
-- [ ] **Diagramma di attività** — la logica di `decide_escalation`, con
-      swimlane modello / motore di regole per rendere visibile il principio
-      "il modello osserva, il codice decide".
+- [x] **Diagramma di attività** — `attivita_escalation.puml`, con swimlane
+      modello / motore di regole / operatore.
+
+Tutti e sei i diagrammi UML sono in `docs/diagrams/` come sorgente PlantUML
+più PNG e SVG. Resta il **documento di specifica dei requisiti**.
 - [ ] **Documento di specifica dei requisiti** (IEEE 830 / ISO 29148) con
       matrice di tracciabilità requisito → policy di origine → componente →
       test che lo verifica.

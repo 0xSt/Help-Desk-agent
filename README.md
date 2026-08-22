@@ -144,6 +144,45 @@ uv sync --extra analysis && uv run python analysis/eda.py
   entra nella coda dell'operatore con allegato l'elenco completo dei trigger.
 - **`finalize`** — consolida la risposta definitiva e aggiorna la cronologia.
 
+### Diagramma dei componenti
+
+![Architettura di deployment](docs/diagrams/componenti.png)
+
+I quattro servizi containerizzati con le interfacce che espongono e le
+dipendenze di avvio dichiarate nel compose. Due cose che il diagramma chiarisce
+meglio di una descrizione a parole:
+
+- **il browser parla con un solo servizio.** nginx serve le pagine e inoltra
+  `/api/*` al backend, quindi non esiste traffico cross-origin: niente CORS da
+  configurare, niente URL del backend da iniettare nel JavaScript, e il codice
+  lato client resta identico a quello che gira in sviluppo locale.
+- **`ingestion` è un job, non un servizio.** Stessa immagine del backend con un
+  comando diverso: popola Qdrant e termina. Il backend non parte finché non è
+  uscito con successo (`service_completed_successfully`), altrimenti le prime
+  richieste troverebbero collection vuote e ogni ticket verrebbe escalato per
+  mancanza di appigli.
+
+È anche il diagramma in cui si vede il limite noto più rilevante: lo stato del
+backend (checkpointer, ticket, thread) vive **in memoria di processo** e si
+perde al riavvio del container.
+
+### Diagramma di attività — la decisione di escalation
+
+![Decisione di escalation](docs/diagrams/attivita_escalation.png)
+
+Le swimlane sono la ragione d'essere di questo diagramma: rendono verificabile
+a colpo d'occhio che il modello linguistico occupa una fascia sola e stretta —
+**genera la bozza, dichiara una confidenza, estrae i segnali** — mentre la
+decisione di coinvolgere un umano avviene interamente nella corsia del motore
+di regole. È l'affermazione "il modello osserva, il codice decide" resa
+visibile invece che dichiarata.
+
+Le tre partizioni corrispondono alle tre famiglie di segnali, valutate in
+quest'ordine: mandatori (POL-006 §3, POL-008 §5), confidenza (§4), retrieval
+(§4 e §6). L'ordine conta due volte: i mandatori sono **non aggirabili** da una
+confidenza alta, e `reason()` mostra all'operatore il motivo più cogente per
+primo.
+
 ### Diagrammi delle classi
 
 Due viste dello stesso backend, con livelli di dettaglio diversi perché
