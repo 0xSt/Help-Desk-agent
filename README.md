@@ -144,6 +144,45 @@ uv sync --extra analysis && uv run python analysis/eda.py
   entra nella coda dell'operatore con allegato l'elenco completo dei trigger.
 - **`finalize`** — consolida la risposta definitiva e aggiorna la cronologia.
 
+### Diagrammi delle classi
+
+Due viste dello stesso backend, con livelli di dettaglio diversi perché
+rispondono a domande diverse.
+
+![Vista per sottosistemi](docs/diagrams/classi_astratto.png)
+
+La **vista astratta** mostra come è organizzato il backend e quali
+responsabilità ha ciascun sottosistema, omettendo di proposito attributi e
+firme. Il messaggio che deve passare è la separazione fra i **tre store**:
+sembrano ridondanti e non lo sono. Il checkpointer sa riprendere
+un'esecuzione sospesa ma non risponde a "dammi tutti i ticket aperti"; il
+`TicketStore` è il record di business; il `ThreadRegistry` è il ciclo di vita
+della conversazione. Una conversazione può esistere senza diventare mai un
+ticket, e risolvere un ticket non chiude la conversazione: fonderli sarebbe
+l'errore architetturale più facile da commettere qui.
+
+Si vede anche la separazione fra `llm` (osserva) ed `escalation` (decide).
+
+![Vista dettagliata](docs/diagrams/classi_dettaglio.png)
+
+La **vista dettagliata** riporta attributi e firme delle strutture dati che
+attraversano il sistema, presi dal codice. Tre punti da notare:
+
+- `TicketSignals` è lo schema passato a Gemini come `response_schema`, quindi
+  la risposta è garantita conforme. **Nessuno dei suoi campi dice "escala"**:
+  il modello riporta ciò che il ticket afferma, la decisione è di
+  `escalation.decide()`.
+- `EscalationDecision` contiene una **lista di `Trigger`**, non un booleano.
+  Serve tre volte: l'operatore vede tutti i motivi con la clausola di
+  ciascuno, l'evaluation misura l'accuratezza per singolo segnale, e in debug
+  si vede quale regola ha deciso.
+- `AgentState` è diviso per fase (ingresso, retrieval, agente, decisione,
+  esito): rende visibile quale nodo popola cosa.
+
+Restano fuori i moduli senza stato (`retrieval`, `tracing`, `config`), che
+compaiono nella vista astratta, e i modelli di richiesta/risposta HTTP, che
+sono contratto di trasporto e non logica di dominio.
+
 ### Diagrammi dei casi d'uso
 
 Due diagrammi separati, perché il sistema ha due insiemi di attori con

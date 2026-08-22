@@ -1,0 +1,213 @@
+@startuml classi_dettaglio
+' ===========================================================================
+' Diagramma delle classi — vista dettagliata
+'
+' Attributi e firme delle strutture dati che attraversano il sistema. Nomi e
+' tipi sono presi dal codice, non idealizzati: `TicketSignals` ha davvero
+' quei campi ed è davvero lo schema imposto al modello via structured output.
+'
+' Sono omessi di proposito: i moduli senza stato (retrieval, tracing, config),
+' che nella vista astratta compaiono come tali; i modelli Pydantic di
+' richiesta/risposta HTTP, che sono contratto di trasporto e non logica di
+' dominio; i campi privati di lock e sincronizzazione.
+'
+' Rigenerazione:
+'   java -jar plantuml.jar -tpng -tsvg -o . docs/diagrams/classi_dettaglio.puml
+' ===========================================================================
+
+title Strutture dati del dominio — vista dettagliata
+
+' Senza questa riga il punto in 'llm.py' verrebbe letto come separatore
+' di namespace, generando package annidati fantasma.
+set separator none
+
+skinparam backgroundColor #FAFAF9
+skinparam roundCorner 6
+skinparam shadowing false
+
+skinparam class {
+  BorderColor #3B4A6B
+  BackgroundColor #FFFFFF
+  HeaderBackgroundColor #EEF1F7
+  FontColor #1C1B19
+  ArrowColor #6B6862
+  AttributeFontColor #1C1B19
+}
+skinparam package {
+  BorderColor #6B6862
+  BackgroundColor #FAFAF9
+  FontStyle bold
+}
+skinparam note {
+  BackgroundColor #FDF3E0
+  BorderColor #E3AB3F
+}
+
+package "Contratto con il modello (llm.py)" #FFFFFF {
+
+  enum TicketCategory {
+    Account & Access Management
+    Hardware
+    Network & Connectivity
+    Software
+    Security
+    Email & Communication
+    Cloud & Collaboration Tools
+  }
+
+  class TicketSignals <<Pydantic>> {
+    .. classificazione ..
+    +category : TicketCategory
+    +subcategory : str
+    +priority : "P1".."P4"
+    .. osservazioni per le regole POL-006 §3 ..
+    +involuntary_termination : bool
+    +sensitive_system_access : bool
+    +approvals_documented : bool
+    +exceeds_spend_threshold : bool
+    +non_catalog_software : bool
+    +explicit_human_request : bool
+    +multi_user_impact : bool
+    +asks_to_bypass_approval : bool
+    +out_of_scope_domain : "none"|"hr"|"legal"
+  }
+
+  class DraftAnswer <<Pydantic>> {
+    +answer : str
+    +confidence : float [0..1]
+    +signals : TicketSignals
+  }
+}
+
+package "Decisione (escalation.py)" #FFFFFF {
+
+  class Trigger <<dataclass>> {
+    +code : str
+    +kind : str
+    +description : str
+    --
+    code = clausola di policy,
+    es. "POL-006 §3.1"
+    kind = mandatory | confidence | retrieval
+  }
+
+  class EscalationDecision <<dataclass>> {
+    +escalate : bool
+    +triggers : List<Trigger>
+    --
+    +reason() : Optional<str>
+    +as_payload() : List<Dict>
+  }
+}
+
+package "Stato del workflow (graph.py)" #FFFFFF {
+
+  class AgentState <<TypedDict>> {
+    .. ingresso ..
+    +user_query : str
+    +history : List<Dict>
+    +exclude_sources : List<str>
+    .. prodotto dal retrieval ..
+    +kb_docs_context : List<Dict>
+    +kb_tickets_context : List<Dict>
+    .. prodotto dall'agente ..
+    +draft_answer : str
+    +confidence : float
+    +signals : Dict
+    .. prodotto dalla decisione ..
+    +needs_review : bool
+    +review_reason : Optional<str>
+    +escalation_triggers : List<Dict>
+    .. esito ..
+    +final_answer : Optional<str>
+    +reviewed_by_human : bool
+  }
+}
+
+package "Stato applicativo (store.py, threads.py)" #FFFFFF {
+
+  class Ticket <<dataclass>> {
+    +ticket_id : str
+    +subject : str
+    +status : "awaiting_agent"|"resolved"
+    +review_reason : Optional<str>
+    +confidence : Optional<float>
+    +draft_answer : Optional<str>
+    +resolved_answer : Optional<str>
+    +created_at : float
+    +resolved_at : Optional<float>
+  }
+
+  class TicketStore {
+    -_tickets : Dict<str, Ticket>
+    -_lock : Lock
+    --
+    +escalate(ticket_id, subject, review_reason,\n  confidence, draft_answer) : None
+    +resolve(ticket_id, resolved_answer) : None
+    +remove(ticket_id) : None
+    +pending() : List<Ticket>
+  }
+
+  class ThreadInfo <<dataclass>> {
+    +thread_id : str
+    +subject : str
+    +status : "active"|"closed"
+    +created_at : float
+    +last_activity_at : float
+    +closed_at : Optional<float>
+  }
+
+  class ThreadRegistry {
+    -_threads : Dict<str, ThreadInfo>
+    -_lock : Lock
+    --
+    +touch(thread_id, message) : None
+    +is_closed(thread_id) : bool
+    +close(thread_id) : bool
+    +list_active() : List<ThreadInfo>
+  }
+}
+
+' --- relazioni ---
+DraftAnswer *-- TicketSignals
+TicketSignals ..> TicketCategory
+
+EscalationDecision *-- "0..*" Trigger
+
+TicketSignals ..> EscalationDecision : decide(signals,\nconfidence, kb_*)
+AgentState ..> DraftAnswer : popolato da
+AgentState ..> EscalationDecision : popolato da
+
+TicketStore *-- "0..*" Ticket
+ThreadRegistry *-- "0..*" ThreadInfo
+
+Ticket .. ThreadInfo : ticket_id == thread_id\n(join implicito)
+
+note bottom of TicketSignals
+  È lo schema passato a Gemini come
+  `response_schema`: la risposta è garantita
+  conforme, invece di chiedere "rispondi solo
+  JSON" e sperare che il parsing regga.
+  Nessun campo dice "escala": il modello
+  riporta ciò che il ticket afferma, la
+  decisione la prende `escalation.decide()`.
+end note
+
+note right of Trigger
+  Una LISTA di trigger, non un booleano.
+  Serve tre volte: l'operatore vede tutti i
+  motivi con la clausola di ciascuno,
+  l'evaluation misura l'accuratezza per
+  singolo segnale, e in debug si vede
+  QUALE regola ha deciso.
+end note
+
+note bottom of ThreadInfo
+  `ticket_id` e `thread_id` sono lo stesso
+  identificatore usato per due scopi: nessuna
+  tabella di mapping. Ma i cicli di vita
+  restano indipendenti — una conversazione può
+  non diventare mai un ticket.
+end note
+
+@enduml

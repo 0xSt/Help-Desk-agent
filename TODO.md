@@ -152,10 +152,9 @@ negativi).
       `use_cases_amministrazione.puml` (Manutentore).
 - [ ] **Diagramma dei componenti** — i quattro servizi e le interfacce fra
       loro; è dove si vede il reverse proxy.
-- [ ] **Diagramma delle classi** — limitato ai sottosistemi che contano:
-      `AgentState`, `TicketSignals`, `EscalationDecision`/`Trigger`,
-      `TicketStore`/`Ticket`, `ThreadRegistry`/`ThreadInfo`. Da far emergere
-      la separazione fra i tre store (checkpointer, ticket, thread).
+- [x] **Diagrammi delle classi** — due viste: `classi_astratto.puml`
+      (sottosistemi e responsabilità, con la separazione fra i tre store) e
+      `classi_dettaglio.puml` (attributi e firme delle strutture di dominio).
 - [ ] **Diagramma di attività** — la logica di `decide_escalation`, con
       swimlane modello / motore di regole per rendere visibile il principio
       "il modello osserva, il codice decide".
