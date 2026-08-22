@@ -160,9 +160,14 @@ negativi).
 
 Tutti e sei i diagrammi UML sono in `docs/diagrams/` come sorgente PlantUML
 più PNG e SVG. Resta il **documento di specifica dei requisiti**.
-- [ ] **Documento di specifica dei requisiti** (IEEE 830 / ISO 29148) con
-      matrice di tracciabilità requisito → policy di origine → componente →
-      test che lo verifica.
+- [x] **Documento di specifica dei requisiti** — `docs/SRS.md`, 71 requisiti
+      funzionali e 7 non funzionali, con matrice di tracciabilità. PDF
+      generabile con:
+      `pandoc docs/SRS.md -o docs/SRS.pdf --pdf-engine=xelatex`
+- [ ] **Rileggere le verifiche citate nei requisiti** dopo aver eseguito
+      l'evaluation con Gemini: alcune rimandano a suite i cui esiti reali non
+      sono ancora noti, e le soglie in RNF-06 (richiamo ≥ 0,90) sono un
+      obiettivo dichiarato, non un risultato misurato.
 
 ## P2 — Rifiniture
 

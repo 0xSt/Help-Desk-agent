@@ -23,3 +23,6 @@ mlflow.db-shm
 .DS_Store
 .idea/
 .vscode/
+
+# PDF generato dal sorgente Markdown (rigenerabile con pandoc)
+docs/SRS.pdf
