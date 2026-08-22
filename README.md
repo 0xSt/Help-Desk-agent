@@ -144,6 +144,37 @@ uv sync --extra analysis && uv run python analysis/eda.py
   entra nella coda dell'operatore con allegato l'elenco completo dei trigger.
 - **`finalize`** — consolida la risposta definitiva e aggiorna la cronologia.
 
+### Diagrammi dei casi d'uso
+
+Due diagrammi separati, perché il sistema ha due insiemi di attori con
+frequenze d'uso e cicli di vita diversi: chi lo **usa** a runtime e chi lo
+**gestisce e valuta**. Mescolarli avrebbe prodotto un unico diagramma
+illeggibile in cui le due prospettive si confondono.
+
+![Casi d'uso operativi](docs/diagrams/use_cases_operativi.png)
+
+Nel diagramma operativo la relazione da guardare è
+`UC-05 ..> UC-04 : «extend»`. L'escalation è modellata come **estensione** e
+non come inclusione perché non avviene sempre: dipende dai trigger valutati a
+runtime. Un `«include»` affermerebbe che ogni ticket passa da un operatore,
+cioè l'opposto dell'obiettivo del sistema.
+
+Due cose che il diagramma dice e che vale la pena notare: il richiedente
+**non** modifica la bozza (può solo consultarne l'esito — la revisione è
+prerogativa esclusiva dell'operatore, ed è ciò che distingue questo flusso da
+una normale chat assistita); e UC-07 non ha alcuna relazione UML con UC-05,
+perché sono casi d'uso di attori diversi, separati nel tempo e raccordati
+soltanto dalla coda dei ticket.
+
+![Casi d'uso di amministrazione](docs/diagrams/use_cases_amministrazione.png)
+
+Nel diagramma amministrativo le tre suite di valutazione sono modellate come
+**generalizzazioni** di UC-13, non come inclusioni: sono modi alternativi di
+raggiungere lo stesso obiettivo, non parti obbligatorie di esso. E UC-12
+(calibrazione) precede UC-13 e non lo segue, perché le soglie vanno tarate su
+dati privi di etichette: tararle sui casi di test renderebbe la valutazione
+successiva priva di significato.
+
 ### Diagramma di sequenza del flusso HITL
 
 ![Flusso human-in-the-loop](docs/diagrams/hitl_sequence.png)
@@ -170,7 +201,7 @@ Le tre cose da guardare:
 Per rigenerarlo dopo una modifica:
 
 ```bash
-java -jar plantuml.jar -tpng -tsvg -o . docs/diagrams/hitl_sequence.puml
+java -jar plantuml.jar -tpng -tsvg -o . docs/diagrams/*.puml
 ```
 
 ## Logica di escalation multisegnale

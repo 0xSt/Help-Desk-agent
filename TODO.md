@@ -147,9 +147,9 @@ negativi).
 
 - [x] **Diagramma di sequenza del flusso HITL** — `docs/diagrams/hitl_sequence.puml`,
       sorgente PlantUML versionato più PNG e SVG renderizzati.
-- [ ] **Diagramma dei casi d'uso** — due attori (Richiedente, Operatore); la
-      revisione della risposta va modellata come `«extend»` di "Elabora
-      richiesta", perché esiste solo in conseguenza di un'escalation.
+- [x] **Diagrammi dei casi d'uso** — due diagrammi separati per i due insiemi
+      di attori: `use_cases_operativi.puml` (Richiedente, Operatore) e
+      `use_cases_amministrazione.puml` (Manutentore).
 - [ ] **Diagramma dei componenti** — i quattro servizi e le interfacce fra
       loro; è dove si vede il reverse proxy.
 - [ ] **Diagramma delle classi** — limitato ai sottosistemi che contano:
