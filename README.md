@@ -631,6 +631,32 @@ python -m evaluation.run_evaluation --suite escalation --sample 40
 python -m evaluation.run_evaluation --suite answers --judge-sample 20
 ```
 
+### Monitoraggio dei prompt
+
+Il prompt è un parametro del sistema al pari di una soglia, ma è l'unico che
+normalmente non compare quando si confrontano due esecuzioni. Se la qualità
+delle risposte cambia, senza versionarlo non si distingue una variazione dovuta
+alla riformulazione delle istruzioni da una dovuta al modello, ai dati o alle
+soglie.
+
+`app/prompts.py` registra i prompt nel **Prompt Registry di MLflow**:
+
+- il prompt dell'agente viene registrato all'avvio del backend;
+- quello del giudice all'avvio di una valutazione — una sua modifica sposta i
+  punteggi senza che il sistema valutato sia cambiato, quindi va tracciata
+  anch'essa;
+- una **nuova versione nasce solo se il testo è effettivamente cambiato**:
+  senza questo confronto ogni riavvio ne creerebbe una identica alla
+  precedente, rendendo illeggibile la cronologia proprio quando serve;
+- l'alias `production` punta sempre alla versione attiva;
+- la versione finisce fra i parametri di ogni run, di avvio e di valutazione.
+
+L'effetto pratico: affiancando due run in MLflow si vede subito se una
+differenza nelle metriche coincide con un cambio di versione del prompt. È il
+modo per rispondere alla domanda "la modifica *risolvi in un solo messaggio* ha
+migliorato o peggiorato il sistema?" con un confronto invece che con
+un'impressione.
+
 ### Scelte di progetto
 
 **La taratura non usa i casi di test.** `calibrate_thresholds.py` confronta la

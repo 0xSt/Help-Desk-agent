@@ -366,9 +366,36 @@ def evaluate_escalation(cases: Sequence[EscalationCase]) -> Dict[str, float]:
 # Utility
 # ==========================================================================
 
+def sanitize_metric_name(name: str) -> str:
+    """
+    Rende un nome di metrica accettabile da MLflow.
+
+    MLflow ammette solo lettere, cifre, underscore, trattini, punti, spazi,
+    barre e due punti. I nostri nomi contengono i codici di policy, e il
+    carattere di sezione (§) non è fra quelli ammessi: `log_metrics` rifiuta
+    **l'intero batch** se anche un solo nome è invalido, quindi senza questa
+    normalizzazione andrebbero perse *tutte* le metriche, non solo quelle con
+    il carattere incriminato.
+
+    La sostituzione mantiene leggibile la corrispondenza con la clausola di
+    origine: "trigger/POL-006 §3.1/recall" diventa
+    "trigger/POL-006_sec3.1/recall".
+    """
+    pulito = name.replace("§", "sec").replace(" ", "_")
+    return "".join(c for c in pulito if c.isalnum() or c in "_-./: ")
+
+
 def flatten_metrics(*groups: Dict[str, float]) -> Dict[str, float]:
-    """Unisce più dizionari di metriche, per un singolo `mlflow.log_metrics`."""
+    """
+    Unisce più dizionari di metriche, normalizzandone i nomi per MLflow.
+
+    La normalizzazione avviene qui, in un unico punto attraversato da tutte le
+    metriche prima di essere registrate, invece che nei singoli produttori:
+    così le funzioni di misura restano libere di usare i nomi naturali del
+    dominio, con i codici di policy scritti per esteso.
+    """
     out: Dict[str, float] = {}
     for g in groups:
-        out.update(g)
+        for k, v in g.items():
+            out[sanitize_metric_name(k)] = v
     return out

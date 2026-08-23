@@ -114,6 +114,9 @@ Resta aperto:
       raccolti finora vengono dalla modalità mock e non dicono nulla sul
       sistema reale.
 - [ ] **Rimisurare dopo la modifica al prompt "risolvi in un messaggio".**
+      Ora è possibile in modo rigoroso: il prompt registry versiona il testo e
+      ne registra la versione nei parametri di ogni run, quindi i due
+      confronti sono affiancabili in MLflow.
       Chiedere risposte autosufficienti cambia il testo generato e può
       spostare la confidenza dichiarata, quindi tocca proprio i segnali su cui
       si regge l'escalation §4. Le suite vanno rieseguite prima e dopo la

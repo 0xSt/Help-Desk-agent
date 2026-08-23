@@ -96,14 +96,26 @@ def log_run_configuration() -> None:
     Serve a rendere ricostruibile *con quale configurazione* è stato prodotto
     un certo insieme di trace: senza, confrontare due sessioni con soglie
     diverse diventa impossibile a posteriori.
+
+    Include la versione dei prompt attivi (vedi `app/prompts.py`): il prompt è
+    un parametro del sistema come una soglia, e senza versionarlo una
+    variazione nella qualità delle risposte non sarebbe attribuibile alla sua
+    riformulazione piuttosto che al modello o ai dati.
     """
     if not _initialized:
         return
     try:
         import mlflow
 
+        from app import prompts
+
+        # Registra il prompt dell'agente prima di aprire il run, così la
+        # versione risultante può essere loggata insieme alla configurazione.
+        prompts.register_agent_prompt()
+
         with mlflow.start_run(run_name="service-startup"):
             mlflow.log_params(config.as_params())
+            mlflow.log_params(prompts.as_params())
     except Exception:
         logger.warning("Impossibile registrare la configurazione su MLflow.", exc_info=True)
 

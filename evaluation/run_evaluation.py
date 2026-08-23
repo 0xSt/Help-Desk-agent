@@ -24,6 +24,7 @@ import logging
 from pathlib import Path
 import random
 import uuid
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Set
 
 from app import config
@@ -448,25 +449,62 @@ def _log_table(rows: List[Dict[str, Any]], name: str) -> None:
         logger.warning("MLflow non disponibile: tabella scritta in %s", out)
 
 
-def log_to_mlflow(metrics: Dict[str, float], suite: str) -> None:
+@contextmanager
+def mlflow_run(suite: str, enabled: bool):
     """
-    Registra metriche e configurazione come run MLflow.
+    Apre il run MLflow **prima** dell'esecuzione delle suite.
 
-    Loggare `config.as_params()` insieme alle metriche è ciò che rende i run
-    confrontabili: senza sapere con quali soglie e quale modello è stato
-    prodotto un risultato, il numero da solo non dice nulla e non si possono
-    confrontare due configurazioni.
+    L'ordine non è un dettaglio. `mlflow.log_table`, usato per salvare il
+    dettaglio per caso, richiede un run attivo e ne apre uno implicitamente se
+    non lo trova: aprendo il run solo alla fine, per registrare le metriche, le
+    tabelle sarebbero finite in un run diverso da quello delle metriche che
+    devono spiegare — e il secondo `start_run` avrebbe comunque fallito,
+    trovandone già uno attivo.
+
+    Registra come parametri sia la configurazione sia la versione dei prompt:
+    è ciò che rende confrontabili due valutazioni a distanza di tempo.
     """
+    if not enabled:
+        yield
+        return
+
     try:
         import mlflow
+
+        from app import prompts
+        from evaluation.judge import JUDGE_PROMPT
+
+        # Registrati prima di aprire il run: le metriche di una valutazione
+        # vanno attribuite tanto al prompt dell'agente quanto a quello del
+        # giudice, perché una modifica del secondo sposta i punteggi senza che
+        # il sistema valutato sia cambiato.
+        prompts.register_agent_prompt()
+        prompts.ensure_registered(prompts.JUDGE_PROMPT_NAME, JUDGE_PROMPT,
+                                  commit_message="Prompt del giudice di valutazione")
 
         mlflow.set_experiment(f"{config.MLFLOW_EXPERIMENT}-eval")
         with mlflow.start_run(run_name=f"eval-{suite}"):
             mlflow.log_params(config.as_params())
-            mlflow.log_metrics(metrics)
-            logger.info("Metriche registrate su MLflow (suite=%s).", suite)
+            mlflow.log_params(prompts.as_params())
+            yield
+            logger.info("Run di valutazione registrato su MLflow (suite=%s).", suite)
+
     except Exception:
-        logger.exception("Logging su MLflow fallito: le metriche restano solo a video.")
+        logger.exception("Registrazione su MLflow fallita: le metriche restano solo a video.")
+        yield
+
+
+def log_metrics(metrics: Dict[str, float]) -> None:
+    """Registra le metriche nel run già aperto da `mlflow_run`."""
+    if not metrics:
+        return
+    try:
+        import mlflow
+
+        if mlflow.active_run() is not None:
+            mlflow.log_metrics(metrics)
+    except Exception:
+        logger.warning("Impossibile registrare le metriche.", exc_info=True)
 
 
 def main() -> int:
@@ -487,23 +525,22 @@ def main() -> int:
     args = parser.parse_args()
 
     groups = []
-    if args.suite in ("retrieval", "all"):
-        groups.append(run_retrieval_suite(k=args.k, sample=args.sample))
-    if args.suite in ("escalation-a", "escalation", "all"):
-        groups.append(run_escalation_suite_a(sample=args.sample))
-    if args.suite in ("escalation-b", "escalation", "all"):
-        groups.append(run_escalation_suite_b())
-    if args.suite in ("answers", "all"):
-        groups.append(run_answer_quality_suite(sample=args.judge_sample))
+    with mlflow_run(args.suite, enabled=not args.no_mlflow):
+        if args.suite in ("retrieval", "all"):
+            groups.append(run_retrieval_suite(k=args.k, sample=args.sample))
+        if args.suite in ("escalation-a", "escalation", "all"):
+            groups.append(run_escalation_suite_a(sample=args.sample))
+        if args.suite in ("escalation-b", "escalation", "all"):
+            groups.append(run_escalation_suite_b())
+        if args.suite in ("answers", "all"):
+            groups.append(run_answer_quality_suite(sample=args.judge_sample))
 
-    metrics = flatten_metrics(*groups)
+        metrics = flatten_metrics(*groups)
+        log_metrics(metrics)
 
     print(f"\n=== Risultati (suite={args.suite}) ===")
     for name, value in sorted(metrics.items()):
         print(f"  {name:45s} {value:.4f}")
-
-    if not args.no_mlflow and metrics:
-        log_to_mlflow(metrics, args.suite)
 
     return 0
 
