@@ -121,6 +121,11 @@ Resta aperto:
       groundedness è l'indicatore da sorvegliare: il rischio specifico di
       questo prompt è che il modello colmi i vuoti inventando procedura pur di
       non fare domande.
+- [ ] **Limite noto della calibrazione**: la popolazione "in dominio" usa
+      `subject + description` dei ticket come query, cioè testi quasi identici
+      a quelli indicizzati. Le richieste reali sono formulate diversamente,
+      quindi la soglia calibrata è **ottimistica**. Da mitigare parafrasando un
+      campione di ticket, o accettando il bias e documentandolo.
 - [ ] **Confrontare un giudice diverso dal modello valutato.** `JUDGE_MODEL`
       è configurabile apposta: un giudice che condivide con l'esaminato gli
       stessi punti ciechi tende a non vederne gli errori.

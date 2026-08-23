@@ -26,6 +26,7 @@ import random
 import uuid
 from typing import Any, Dict, List, Optional, Set
 
+from app import config
 from app.retrieval import search_kb_docs, search_kb_tickets
 from evaluation.metrics import (
     EscalationCase,
@@ -335,10 +336,16 @@ def run_retrieval_suite(k: int = 3, sample: int = 0) -> Dict[str, float]:
             pid = r.get("policy_id")
             if pid and pid not in recuperati_d:
                 recuperati_d.append(pid)
-        attese = set(rilevanza.get(subcat, {}).get("expected", []))
+        mappa = rilevanza.get(subcat, {})
+        attese = set(mappa.get("expected", []))
+        # Le policy "acceptable" sono pertinenti ma non indispensabili: non
+        # contano come successo nel recall, ma non devono nemmeno essere
+        # contate come errore nella precision (vedi policy_relevance.json).
+        tollerate = set(mappa.get("acceptable", []))
         casi_docs.append(RetrievalCase(
             query_id=tid, retrieved_ids=recuperati_d, relevant_ids=attese,
             top_score=risultati_d[0]["score"] if risultati_d else 0.0,
+            ignored_ids=tollerate,
         ))
 
         per_caso.append({
@@ -349,6 +356,7 @@ def run_retrieval_suite(k: int = 3, sample: int = 0) -> Dict[str, float]:
             "tickets_top_score": round(risultati_t[0]["score"], 4) if risultati_t else 0.0,
             "docs_retrieved": ", ".join(recuperati_d),
             "docs_expected": ", ".join(sorted(attese)),
+            "docs_acceptable": ", ".join(sorted(tollerate)),
             "docs_hit": bool(set(recuperati_d) & attese),
             "docs_top_score": round(risultati_d[0]["score"], 4) if risultati_d else 0.0,
         })
@@ -381,7 +389,7 @@ def run_answer_quality_suite(sample: int = 20) -> Dict[str, float]:
     """
     from evaluation.judge import aggrega, giudica
 
-    if not config_modulo().GEMINI_API_KEY:
+    if not config.GEMINI_API_KEY:
         logger.warning("Suite 'answers' saltata: richiede una chiave API attiva.")
         return {}
 
@@ -410,11 +418,6 @@ def run_answer_quality_suite(sample: int = 20) -> Dict[str, float]:
 
     _log_table(per_caso, "answers_per_case")
     return aggrega(giudizi, totale_casi=len(cases))
-
-
-def config_modulo():
-    from app import config
-    return config
 
 
 # ==========================================================================
@@ -456,7 +459,6 @@ def log_to_mlflow(metrics: Dict[str, float], suite: str) -> None:
     """
     try:
         import mlflow
-        from app import config
 
         mlflow.set_experiment(f"{config.MLFLOW_EXPERIMENT}-eval")
         with mlflow.start_run(run_name=f"eval-{suite}"):

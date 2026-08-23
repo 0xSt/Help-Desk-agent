@@ -36,10 +36,13 @@ import json
 import logging
 import random
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 from app import config
 from app.retrieval import search_kb_docs, search_kb_tickets
+# Percentile condiviso con metrics.py: le statistiche sui punteggi prodotte
+# dai due strumenti devono essere calcolate allo stesso modo.
+from evaluation.metrics import percentile as _percentile
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -47,15 +50,7 @@ DATASETS = Path(__file__).parent / "datasets"
 KB = Path(__file__).parent.parent / "app" / "knowledge_base"
 
 
-def _percentile(valori: Sequence[float], p: float) -> float:
-    if not valori:
-        return 0.0
-    s = sorted(valori)
-    idx = min(len(s) - 1, max(0, int(round(p * (len(s) - 1)))))
-    return s[idx]
-
-
-def _riassunto(nome: str, valori: List[float]) -> Dict[str, float]:
+def _riassunto(nome: str, valori: List[float]) -> Dict[str, Any]:
     return {
         "popolazione": nome,
         "n": len(valori),
@@ -171,6 +166,9 @@ def main() -> int:
           f"(quelle sotto verrebbero escalate per mancanza di appigli)")
     print(f"  query fuori dominio sotto      : {esito['fuori_dominio_sotto_soglia']:.1%} "
           f"(quelle sopra NON verrebbero intercettate)")
+    print(f"  fuori dominio nel range di quelle in dominio: "
+          f"{esito['ood_oltre_p05_in_dominio']:.0f} su {len(fuori_dominio)} "
+          f"(sovrapposizione irriducibile fra le due popolazioni)")
 
     if esito["separazione"] < 0.75:
         print("\n  Separazione debole: le due distribuzioni si sovrappongono molto.")
