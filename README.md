@@ -659,6 +659,14 @@ un'impressione.
 
 ### Scelte di progetto
 
+**La taratura ha un bias noto e accettato.** Le query "in dominio" usano gli
+stessi campi che vengono indicizzati, quindi appartengono alla stessa
+popolazione linguistica dei documenti: richieste reali, formulate in modo più
+colloquiale, otterrebbero punteggi più bassi. La soglia che ne risulta è
+perciò **ottimistica** e il sistema tende a escalare più del necessario. È un
+*distribution shift* documentato e non corretto: la direzione dell'errore è
+quella prudente, coerente con l'impostazione conservativa dell'escalation.
+
 **La taratura non usa i casi di test.** `calibrate_thresholds.py` confronta la
 distribuzione dei punteggi delle query in dominio con quelle fuori dominio
 (`out_of_domain_queries.json`): nessuna delle due popolazioni ha etichette.

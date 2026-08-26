@@ -36,6 +36,29 @@ non direbbero più nulla. Così i casi etichettati restano intatti.
 La soglia proposta è il punto che separa meglio le due distribuzioni. Se si
 sovrappongono ampiamente, nessuna soglia funziona bene: è un'informazione
 sulla qualità del retrieval, non un problema di taratura.
+
+LIMITE NOTO: LA STIMA È OTTIMISTICA
+-----------------------------------
+Le query "in dominio" sono costruite concatenando oggetto e descrizione dei
+ticket storici, cioè **gli stessi campi che vengono indicizzati**. Il
+leave-one-out impedisce a un ticket di recuperare sé stesso, ma non elimina il
+fatto che quel testo appartenga alla stessa popolazione linguistica dei
+documenti indicizzati: stesso registro, stessa lunghezza (mediana 19 parole),
+stesso lessico, perché sono stati scritti insieme.
+
+Una richiesta reale è formulata diversamente — più breve, colloquiale, con
+altre parole — e produce punteggi più bassi contro la stessa knowledge base.
+È un caso di *distribution shift*: la distribuzione su cui si tara il
+parametro non coincide con quella su cui il sistema opera.
+
+Conseguenza: la soglia risultante è **più alta** di quella corretta, quindi il
+sistema tenderà a escalare anche richieste legittime formulate in modo
+colloquiale. La direzione dell'errore è però quella prudente — si escala di
+più, non di meno — ed è coerente con l'impostazione conservativa della logica
+di escalation. Il limite è documentato e accettato, non corretto: mitigarlo
+richiederebbe parafrasare i ticket, introducendo un artefatto (le parafrasi
+verrebbero generate dallo stesso modello che poi risponde) e una validazione
+manuale che il senso sia preservato.
 """
 import argparse
 import json
@@ -144,9 +167,22 @@ def proponi_soglia(in_dominio: List[float], fuori_dominio: List[float]) -> Dict[
 
     Il criterio è la **media tra le due accuratezze** (quota di in dominio
     correttamente sopra soglia e quota di fuori dominio correttamente sotto),
-    non l'accuratezza semplice: le due popolazioni hanno numerosità molto
-    diverse (135 contro 20) e l'accuratezza semplice sarebbe dominata dalla
-    più numerosa, producendo una soglia che ignora i fuori dominio.
+    non l'accuratezza semplice: le due popolazioni hanno numerosità diverse
+    (135 contro 70) e l'accuratezza semplice sarebbe dominata dalla più
+    numerosa, producendo una soglia che ignora i fuori dominio.
+
+    Le soglie candidate sono i punteggi effettivamente osservati, arrotondati
+    al millesimo. Non si esplora una griglia regolare perché fra due punteggi
+    consecutivi la classificazione non cambia: ogni valore intermedio dà
+    esattamente lo stesso esito, e provarli sarebbe lavoro sprecato. I
+    punteggi osservati sono quindi l'insieme completo delle soglie
+    distinguibili.
+
+    A parità di punteggio vince la soglia più bassa, perché il confronto è
+    stretto (`>`) e l'iterazione procede in ordine crescente. È la scelta
+    prudente: una soglia più bassa fa scattare meno spesso l'escalation per
+    mancanza di appigli, quindi in caso di parità si preferisce non escalare
+    per un motivo che le due popolazioni non sanno distinguere.
     """
     candidati = sorted(set(round(v, 3) for v in in_dominio + fuori_dominio))
     migliore, miglior_punteggio = 0.0, -1.0
