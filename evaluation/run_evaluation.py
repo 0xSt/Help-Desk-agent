@@ -508,6 +508,19 @@ def log_metrics(metrics: Dict[str, float]) -> None:
 
 
 def main() -> int:
+    """
+    Punto d'ingresso da riga di comando.
+
+    Le suite girano **dentro** il contesto del run MLflow, non prima: le
+    tabelle per caso vengono scritte durante l'esecuzione e devono finire nel
+    medesimo run delle metriche che spiegano. Aprire il run solo alla fine le
+    disperderebbe in un run separato.
+
+    Le metriche vengono comunque stampate a video anche quando la
+    registrazione fallisce: uno strumento di misura che non produce un
+    risultato leggibile perché è indisponibile la telemetria sarebbe inutile
+    proprio nelle situazioni in cui serve di più.
+    """
     parser = argparse.ArgumentParser(description="Evaluation del sistema di help desk")
     parser.add_argument(
         "--suite",

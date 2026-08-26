@@ -19,8 +19,10 @@ Si confrontano le distribuzioni dei punteggi di due popolazioni:
 
 - **in dominio**: i ticket storici usati come query, in leave-one-out. Sono
   per definizione richieste che la knowledge base copre.
-- **fuori dominio**: query plausibili ma su argomenti che nessuna policy
-  tratta (`out_of_domain_queries.json`).
+- **fuori dominio**: 40 query plausibili ma su argomenti che nessuna policy
+  tratta (`out_of_domain_queries.json`), distribuite su sei aree tematiche
+  diverse. La varietà conta: un campione concentrato su un solo tipo di
+  estraneità darebbe una stima della soglia valida solo per quel tipo.
 
 **Nessuna delle due richiede etichette di escalation.** È deliberato: tarare
 la soglia guardando i 23 casi etichettati e poi misurare il sistema su quegli
@@ -51,6 +53,20 @@ KB = Path(__file__).parent.parent / "app" / "knowledge_base"
 
 
 def _riassunto(nome: str, valori: List[float]) -> Dict[str, Any]:
+    """
+    Statistiche descrittive di una popolazione di punteggi.
+
+    Si riportano i percentili e non media e deviazione standard perché la
+    distribuzione dei punteggi di similarità non è simmetrica e non c'è motivo
+    di assumerla normale: i percentili descrivono dove cadono davvero i valori
+    senza presupporre una forma.
+
+    Servono a leggere la **sovrapposizione** fra le due popolazioni, che è
+    l'informazione decisiva: se il p05 delle query in dominio è sotto il p95
+    di quelle fuori dominio, esiste una fascia in cui nessuna soglia separa
+    correttamente, e la scelta si riduce a decidere quale dei due errori
+    tollerare.
+    """
     return {
         "popolazione": nome,
         "n": len(valori),
@@ -79,6 +95,27 @@ def _best_score(query: str, escludi: Sequence[str] = ()) -> float:
 
 
 def raccogli_punteggi(campione: int = 0) -> Tuple[List[float], List[float]]:
+    """
+    Calcola il miglior punteggio di similarità per ciascuna delle due
+    popolazioni: query in dominio e query fuori dominio.
+
+    Due dettagli che ne determinano la validità.
+
+    **Leave-one-out sulle query in dominio.** Ogni ticket usato come query è
+    anche indicizzato: senza escluderlo recupererebbe sé stesso con similarità
+    prossima a 1, e la distribuzione in dominio risulterebbe artificialmente
+    alta. La soglia che ne deriverebbe sarebbe tarata su un fenomeno che in
+    esercizio non si verifica mai.
+
+    **Campionamento riproducibile.** Il seme è fisso perché due esecuzioni
+    consecutive devono proporre la stessa soglia: se il campione cambiasse a
+    ogni lancio, la variazione del valore proposto sarebbe rumore
+    indistinguibile da un effetto reale.
+
+    Il parametro `campione` esiste per contenere il costo durante lo sviluppo:
+    ogni query in dominio costa un embedding, e 135 embedding per ogni prova
+    di taratura sono superflui quando serve solo un ordine di grandezza.
+    """
     tickets = json.loads((KB / "past_tickets.json").read_text(encoding="utf-8"))
     if campione and campione < len(tickets):
         random.seed(42)  # riproducibile: due esecuzioni danno la stessa soglia
@@ -130,6 +167,20 @@ def proponi_soglia(in_dominio: List[float], fuori_dominio: List[float]) -> Dict[
 
 
 def main() -> int:
+    """
+    Esegue la calibrazione e stampa un riepilogo leggibile.
+
+    Non modifica alcun file: **propone** un valore e lascia all'operatore la
+    decisione di adottarlo. È deliberato — la soglia è un parametro che incide
+    sul comportamento del sistema in produzione, e una modifica automatica
+    partendo da un campione ridotto o da un indice costruito col provider di
+    fallback produrrebbe un cambiamento silenzioso e potenzialmente sbagliato.
+
+    Quando la separazione fra le due popolazioni è debole lo dichiara
+    esplicitamente: in quel caso il problema non è la taratura ma la qualità
+    del recupero, e adottare comunque il valore proposto darebbe l'illusione
+    di aver risolto qualcosa.
+    """
     parser = argparse.ArgumentParser(description="Calibrazione delle soglie di retrieval")
     parser.add_argument("--sample", type=int, default=0,
                         help="usa solo N ticket in dominio (0 = tutti)")

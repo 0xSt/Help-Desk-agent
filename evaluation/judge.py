@@ -97,6 +97,15 @@ Be strict but fair. Judge only what is written in the answer."""
 
 @dataclass
 class RisultatoGiudizio:
+    """
+    Esito del giudizio su un singolo caso.
+
+    Conserva anche `reasoning` e `policy_violation`, che non entrano in alcuna
+    metrica aggregata: servono nella tabella per caso, dove un punteggio basso
+    diventa azionabile solo se accompagnato dalla ragione. Senza, resterebbe
+    da capire se il modello ha sbagliato la risposta o il giudice la
+    valutazione.
+    """
     case_id: str
     groundedness: int
     relevance: int
@@ -106,6 +115,19 @@ class RisultatoGiudizio:
 
 
 def _formatta_contesto(kb_docs: List[Dict[str, Any]], kb_tickets: List[Dict[str, Any]]) -> str:
+    """
+    Compone il contesto recuperato nel testo sottoposto al giudice.
+
+    Le due fonti restano etichettate separatamente perché il criterio di
+    fondatezza si applica a entrambe ma con peso diverso: una procedura
+    inventata contraddicendo una policy è un errore più grave di un dettaglio
+    non riscontrato in un ticket passato.
+
+    Quando non è stato recuperato nulla lo si dichiara esplicitamente invece
+    di passare una stringa vuota: il giudice deve poter distinguere "il
+    sistema ha risposto senza appigli" da "il contesto non gli è stato
+    mostrato", che portano a valutazioni opposte.
+    """
     parti = []
     if kb_docs:
         parti.append("RETRIEVED POLICIES:\n" + "\n\n".join(

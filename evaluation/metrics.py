@@ -199,10 +199,22 @@ class ConfusionMatrix:
 
     @property
     def total(self) -> int:
+        """Numero di casi valutati. Denominatore dell'accuracy."""
         return self.tp + self.fp + self.fn + self.tn
 
     @property
     def precision(self) -> float:
+        """
+        Quota di escalation effettivamente necessarie fra quelle decise.
+
+        Qui misura un **costo operativo**, non la correttezza: una precision
+        bassa significa che gli operatori ricevono ticket che l'agente avrebbe
+        potuto chiudere. È un problema di efficienza, non di sicurezza, e per
+        questo resta subordinata al recall.
+
+        Ritorna 0.0 quando il sistema non ha escalato nulla: la metrica non
+        sarebbe definita, e 0.0 è il valore che non premia quel comportamento.
+        """
         d = self.tp + self.fp
         return self.tp / d if d else 0.0
 
@@ -236,6 +248,15 @@ class ConfusionMatrix:
         return (1 + b2) * p * r / (b2 * p + r)
 
     def as_metrics(self, prefix: str = "escalation") -> Dict[str, float]:
+        """
+        Espone l'intera matrice come dizionario piatto, pronto per MLflow.
+
+        Include i quattro conteggi grezzi oltre alle metriche derivate: sono
+        loro a permettere di ricostruire qualunque altra misura a posteriori,
+        e soprattutto di capire se un valore anomalo dipende da un caso
+        isolato o da un comportamento sistematico. Con campioni di poche
+        decine di casi la differenza è sostanziale.
+        """
         return {
             f"{prefix}/true_positives": float(self.tp),
             f"{prefix}/false_positives": float(self.fp),
@@ -250,6 +271,15 @@ class ConfusionMatrix:
 
 
 def confusion_matrix(predicted: Sequence[bool], expected: Sequence[bool]) -> ConfusionMatrix:
+    """
+    Costruisce la matrice di confusione dai due elenchi appaiati per posizione.
+
+    L'accoppiamento è posizionale, quindi un disallineamento di lunghezza
+    produrrebbe silenziosamente una matrice sbagliata: viene sollevata
+    un'eccezione esplicita invece di lasciare che `zip` tronchi la sequenza
+    più lunga, perché un errore di misura passato inosservato è peggiore di
+    un errore che interrompe l'esecuzione.
+    """
     if len(predicted) != len(expected):
         raise ValueError(
             f"predicted ({len(predicted)}) ed expected ({len(expected)}) hanno lunghezza diversa"
