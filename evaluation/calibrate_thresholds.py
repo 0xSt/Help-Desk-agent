@@ -19,10 +19,14 @@ Si confrontano le distribuzioni dei punteggi di due popolazioni:
 
 - **in dominio**: i ticket storici usati come query, in leave-one-out. Sono
   per definizione richieste che la knowledge base copre.
-- **fuori dominio**: 40 query plausibili ma su argomenti che nessuna policy
-  tratta (`out_of_domain_queries.json`), distribuite su sei aree tematiche
-  diverse. La varietà conta: un campione concentrato su un solo tipo di
-  estraneità darebbe una stima della soglia valida solo per quel tipo.
+- **fuori dominio**: 70 query plausibili ma su argomenti che nessuna policy
+  tratta (`out_of_domain_queries.json`), distribuite su otto aree tematiche.
+  La varietà conta quanto la numerosità: un campione concentrato su un solo
+  tipo di estraneità darebbe una stima valida solo per quel tipo. Sono incluse
+  di proposito query lessicalmente vicine al dominio — domande tecniche non
+  coperte da policy, e domande che citano l'IT senza chiedere supporto — perché
+  sono i casi che una soglia di similarità separa con più difficoltà, e
+  ometterli renderebbe la stima ottimistica.
 
 **Nessuna delle due richiede etichette di escalation.** È deliberato: tarare
 la soglia guardando i 23 casi etichettati e poi misurare il sistema su quegli
