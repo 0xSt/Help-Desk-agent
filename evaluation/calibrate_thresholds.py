@@ -161,15 +161,44 @@ def raccogli_punteggi(campione: int = 0) -> Tuple[List[float], List[float]]:
     return in_dominio, fuori_dominio
 
 
-def proponi_soglia(in_dominio: List[float], fuori_dominio: List[float]) -> Dict[str, float]:
+def proponi_soglia(in_dominio: List[float], fuori_dominio: List[float],
+                   peso_fuori_dominio: float = 0.5) -> Dict[str, float]:
     """
     Cerca la soglia che massimizza la separazione tra le due popolazioni.
 
-    Il criterio è la **media tra le due accuratezze** (quota di in dominio
-    correttamente sopra soglia e quota di fuori dominio correttamente sotto),
-    non l'accuratezza semplice: le due popolazioni hanno numerosità diverse
-    (135 contro 70) e l'accuratezza semplice sarebbe dominata dalla più
-    numerosa, producendo una soglia che ignora i fuori dominio.
+    CRITERIO
+    --------
+    Si massimizza la **media pesata delle due accuratezze**: la quota di query
+    in dominio correttamente sopra soglia (sensibilità nel riconoscere la
+    copertura) e la quota di fuori dominio correttamente sotto (specificità).
+
+    Con `peso_fuori_dominio = 0.5` il criterio coincide con la *balanced
+    accuracy*, e massimizzarla equivale a massimizzare l'**indice J di Youden**
+    (Youden, 1950), definito come `J = sensibilità + specificità - 1`: le due
+    quantità differiscono per una trasformazione monotona (`J = 2·BA - 1`),
+    quindi hanno lo stesso punto di massimo. È il criterio standard per la
+    scelta di un punto di taglio su una curva ROC, e corrisponde
+    geometricamente al punto della curva più distante dalla diagonale del
+    classificatore casuale.
+
+    Non si usa l'accuratezza semplice perché le due popolazioni hanno
+    numerosità diverse (135 contro 70): sarebbe dominata dalla più numerosa e
+    produrrebbe una soglia che di fatto ignora i fuori dominio.
+
+    COSTI ASIMMETRICI
+    -----------------
+    L'indice di Youden assume che i due errori pesino ugualmente, ipotesi che
+    in questo dominio **non è vera**: lasciar passare una richiesta priva di
+    basi documentali (fuori dominio sopra soglia) significa rispondere senza
+    appigli, mentre escalare una richiesta coperta costa solo tempo di un
+    operatore. Il parametro `peso_fuori_dominio` permette di riflettere questa
+    asimmetria: valori superiori a 0,5 spostano la soglia verso l'alto,
+    privilegiando l'intercettazione dei fuori dominio.
+
+    Il valore predefinito resta 0,5 per una ragione precisa: è il criterio
+    neutro e riconosciuto, quindi il punto di partenza difendibile. Alzarlo è
+    una decisione di politica del rischio, che va presa consapevolmente e
+    documentata, non nascosta in un valore predefinito.
 
     Le soglie candidate sono i punteggi effettivamente osservati, arrotondati
     al millesimo. Non si esplora una griglia regolare perché fra due punteggi
@@ -187,10 +216,11 @@ def proponi_soglia(in_dominio: List[float], fuori_dominio: List[float]) -> Dict[
     candidati = sorted(set(round(v, 3) for v in in_dominio + fuori_dominio))
     migliore, miglior_punteggio = 0.0, -1.0
 
+    w = peso_fuori_dominio
     for soglia in candidati:
         sopra = sum(1 for v in in_dominio if v >= soglia) / max(len(in_dominio), 1)
         sotto = sum(1 for v in fuori_dominio if v < soglia) / max(len(fuori_dominio), 1)
-        punteggio = (sopra + sotto) / 2
+        punteggio = (1 - w) * sopra + w * sotto
         if punteggio > miglior_punteggio:
             migliore, miglior_punteggio = soglia, punteggio
 
@@ -200,6 +230,11 @@ def proponi_soglia(in_dominio: List[float], fuori_dominio: List[float]) -> Dict[
     return {
         "soglia_proposta": migliore,
         "separazione": miglior_punteggio,
+        # Indice J di Youden alla soglia scelta: riportato sempre, anche con
+        # pesi sbilanciati, perché è la misura confrontabile con la letteratura
+        # e non dipende dal peso adottato.
+        "youden_j": sopra + sotto - 1,
+        "peso_fuori_dominio": w,
         "in_dominio_sopra_soglia": sopra,
         "fuori_dominio_sotto_soglia": sotto,
         "ood_oltre_p05_in_dominio": sovrapposizione,
@@ -224,6 +259,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Calibrazione delle soglie di retrieval")
     parser.add_argument("--sample", type=int, default=0,
                         help="usa solo N ticket in dominio (0 = tutti)")
+    parser.add_argument("--weight-ood", type=float, default=0.5,
+                        help="peso della specificità sui fuori dominio [0..1]. "
+                             "0.5 = indice di Youden (errori equivalenti); "
+                             "valori maggiori privilegiano l'intercettazione "
+                             "delle richieste prive di basi documentali")
     args = parser.parse_args()
 
     print("=" * 70)
@@ -248,11 +288,15 @@ def main() -> int:
         print(f"  {r['popolazione']:16s} {r['n']:4d} {r['min']:7.3f} {r['p05']:7.3f} "
               f"{r['p25']:7.3f} {r['mediana']:8.3f} {r['p75']:7.3f} {r['p95']:7.3f} {r['max']:7.3f}")
 
-    esito = proponi_soglia(in_dominio, fuori_dominio)
+    esito = proponi_soglia(in_dominio, fuori_dominio, args.weight_ood)
 
     print("\nSOGLIA PROPOSTA\n")
     print(f"  ESCALATION_MIN_RETRIEVAL_SCORE = {esito['soglia_proposta']:.3f}")
-    print(f"  separazione media              : {esito['separazione']:.1%}")
+    print(f"  criterio                       : peso fuori dominio {esito['peso_fuori_dominio']:.2f}"
+          f"{' (indice di Youden)' if abs(esito['peso_fuori_dominio'] - 0.5) < 1e-9 else ' (pesato)'}")
+    print(f"  separazione                    : {esito['separazione']:.1%}")
+    print(f"  indice J di Youden             : {esito['youden_j']:.3f} "
+          f"(0 = casuale, 1 = separazione perfetta)")
     print(f"  query in dominio sopra soglia  : {esito['in_dominio_sopra_soglia']:.1%} "
           f"(quelle sotto verrebbero escalate per mancanza di appigli)")
     print(f"  query fuori dominio sotto      : {esito['fuori_dominio_sotto_soglia']:.1%} "

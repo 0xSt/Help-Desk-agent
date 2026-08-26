@@ -659,6 +659,15 @@ un'impressione.
 
 ### Scelte di progetto
 
+**Il criterio di scelta della soglia è l'indice J di Youden** (Youden, 1950),
+cioè la massimizzazione di `sensibilità + specificità - 1`, equivalente a
+massimizzare la *balanced accuracy*. È il criterio standard per la selezione di
+un punto di taglio su curva ROC e corrisponde al punto più distante dalla
+diagonale del classificatore casuale. Assume però che i due errori pesino
+ugualmente, ipotesi qui discutibile: l'opzione `--weight-ood` permette di
+riflettere l'asimmetria reale dei costi, lasciando 0,5 come predefinito perché
+è il criterio neutro e difendibile.
+
 **La taratura ha un bias noto e accettato.** Le query "in dominio" usano gli
 stessi campi che vengono indicizzati, quindi appartengono alla stessa
 popolazione linguistica dei documenti: richieste reali, formulate in modo più
