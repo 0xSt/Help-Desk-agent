@@ -129,6 +129,11 @@ Resta aperto:
       a quelli indicizzati. Le richieste reali sono formulate diversamente,
       quindi la soglia calibrata è **ottimistica**. Da mitigare parafrasando un
       campione di ticket, o accettando il bias e documentandolo.
+- [ ] **Eseguire la suite RAGAS con una chiave attiva.** Il modulo è scritto
+      contro l'API verificata (costruzione di modelli, metriche e dataset
+      provata in un ambiente isolato) ma **le chiamate reali non sono mai
+      state eseguite**, perché l'ambiente di sviluppo non raggiunge l'API
+      Gemini. Da provare prima di citarne i numeri.
 - [ ] **Confrontare un giudice diverso dal modello valutato.** `JUDGE_MODEL`
       è configurabile apposta: un giudice che condivide con l'esaminato gli
       stessi punti ciechi tende a non vederne gli errori.

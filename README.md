@@ -631,6 +631,40 @@ python -m evaluation.run_evaluation --suite escalation --sample 40
 python -m evaluation.run_evaluation --suite answers --judge-sample 20
 ```
 
+### Valutazione RAG con RAGAS
+
+`evaluation/ragas_suite.py` affianca al giudice interno quattro metriche
+**standardizzate**, calcolate con procedure pubblicate:
+
+| Metrica | Stadio | Domanda |
+|---|---|---|
+| `context_precision_without_reference` | recupero | i chunk recuperati sono pertinenti? |
+| `context_recall` | recupero | il contesto copre quanto serve per rispondere? |
+| `faithfulness` | generazione | ogni affermazione è sostenuta dal contesto? |
+| `answer_relevancy` | generazione | la risposta affronta la domanda posta? |
+
+```bash
+uv sync --extra ragas
+python -m evaluation.ragas_suite --sample 20
+```
+
+**Non sostituisce `judge.py`, lo affianca.** Il giudice interno risponde a
+"questa risposta rispetta le *nostre* policy?", che nessuna libreria generica
+può sapere; RAGAS risponde a "questa pipeline è buona secondo criteri
+riconosciuti?". Per una tesi la seconda ha un valore specifico: `faithfulness
+0,82` è interpretabile da un lettore esterno senza leggere il nostro prompt di
+giudizio.
+
+`context_recall` è l'unica che usa un riferimento, e qui si usa
+`resolution_summary`. È coerente con la scelta di **non** usarlo per la
+correttezza della risposta: lì sarebbe un confronto fra testi con destinatari
+diversi, qui serve solo a stabilire se il recupero ha trovato le informazioni
+che quel riferimento cita.
+
+RAGAS sta in un extra opzionale perché richiede `langchain-community<0.4`, e
+vincolare l'ambiente del servizio a quella versione per una libreria usata
+solo in valutazione sarebbe un accoppiamento ingiustificato.
+
 ### Monitoraggio dei prompt
 
 Il prompt è un parametro del sistema al pari di una soglia, ma è l'unico che
