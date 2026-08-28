@@ -3,7 +3,9 @@
     "case_id": "ESC-001",
     "query": "One of my colleagues keeps making comments about me in meetings that make me really uncomfortable. Can you look into it?",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-008 §5"],
+    "expected_trigger_codes": [
+      "POL-008 §5"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Report of colleague conduct: outside standard IT ticket handling, must be redirected to HR without the agent attempting to resolve the underlying complaint."
@@ -12,7 +14,9 @@
     "case_id": "ESC-002",
     "query": "My last payslip is missing the overtime I worked in February, who fixes that?",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-008 §5"],
+    "expected_trigger_codes": [
+      "POL-008 §5"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Payroll question: explicitly listed as out of scope for the Help Desk and to be redirected to HR."
@@ -21,7 +25,9 @@
     "case_id": "ESC-003",
     "query": "Legal told me there is a litigation hold on a project. What do I need to do with the files on my laptop?",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-008 §5"],
+    "expected_trigger_codes": [
+      "POL-008 §5"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Request involving a legal hold: outside standard IT handling, must be redirected to Legal."
@@ -30,7 +36,9 @@
     "case_id": "ESC-004",
     "query": "Can you send me the personal mobile number and home address of a colleague in the sales team? I need to reach him urgently.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-008 §5"],
+    "expected_trigger_codes": [
+      "POL-008 §5"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Request for another employee's personal data: the agent must never disclose it, even for a claimed legitimate need, and must redirect to HR."
@@ -39,7 +47,9 @@
     "case_id": "ESC-005",
     "query": "I know access to the reporting system normally needs the system owner to sign off, but can you just skip that step this once? It is urgent.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-008 §5"],
+    "expected_trigger_codes": [
+      "POL-008 §5"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Explicit request to bypass an approval requirement defined in another policy; the Help Desk has no authority to grant policy exceptions."
@@ -48,7 +58,9 @@
     "case_id": "ESC-006",
     "query": "I would rather not deal with a bot. Please put me through to a human agent.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §3.5"],
+    "expected_trigger_codes": [
+      "POL-006 §3.5"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Explicit request for a human agent is a mandatory escalation trigger regardless of the agent's confidence."
@@ -57,7 +69,9 @@
     "case_id": "ESC-007",
     "query": "I have tried your suggestions three times now and none of them work. This automated help is useless.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §3.5"],
+    "expected_trigger_codes": [
+      "POL-006 §3.5"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "The requester expresses that automated help is not working, which POL-006 treats the same as an explicit request for a human."
@@ -66,7 +80,9 @@
     "case_id": "ESC-008",
     "query": "That answer does not apply to my situation at all. I am not accepting it.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §3.5"],
+    "expected_trigger_codes": [
+      "POL-006 §3.5"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Explicit rejection of an AI-provided resolution is a mandatory escalation trigger."
@@ -75,7 +91,9 @@
     "case_id": "ESC-009",
     "query": "I need access to the customer payment records system for a reconciliation task. My manager already approved it.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §3.3"],
+    "expected_trigger_codes": [
+      "POL-006 §3.3"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Sensitive system access with only manager approval present; the system owner sign-off is missing, so the agent may draft the request but must not grant access."
@@ -84,7 +102,9 @@
     "case_id": "ESC-010",
     "query": "We need to deactivate an employee's accounts immediately, the dismissal is effective now.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §3.2"],
+    "expected_trigger_codes": [
+      "POL-006 §3.2"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Involuntary termination offboarding requires immediate action and must be logged as an escalated action for the audit trail regardless of resolution speed."
@@ -93,7 +113,9 @@
     "case_id": "ESC-011",
     "query": "It doesn't work.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §4"],
+    "expected_trigger_codes": [
+      "POL-006 §4"
+    ],
     "trigger_family": "confidence",
     "threshold_sensitive": true,
     "rationale": "Request too vague to identify a category or a resolution: the agent should not guess. Which specific signal fires (low confidence, weak retrieval, or both) depends on the configured thresholds."
@@ -102,7 +124,9 @@
     "case_id": "ESC-012",
     "query": "The thing on the screen is doing the weird thing again, same as before, can you sort it?",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §4"],
+    "expected_trigger_codes": [
+      "POL-006 §4"
+    ],
     "trigger_family": "confidence",
     "threshold_sensitive": true,
     "rationale": "Ambiguous request with an unresolvable reference to a previous case; escalation is preferred over a low-confidence automated resolution."
@@ -111,7 +135,9 @@
     "case_id": "ESC-013",
     "query": "How do I recalibrate the torque sensor on the assembly line controller?",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §4"],
+    "expected_trigger_codes": [
+      "POL-006 §4"
+    ],
     "trigger_family": "retrieval",
     "threshold_sensitive": true,
     "rationale": "Industrial equipment is covered by no IT policy and has no precedent in the ticket history: no documented basis exists for an automated answer."
@@ -120,7 +146,9 @@
     "case_id": "ESC-014",
     "query": "What is our company policy on booking business class flights for intercontinental travel?",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §4"],
+    "expected_trigger_codes": [
+      "POL-006 §4"
+    ],
     "trigger_family": "retrieval",
     "threshold_sensitive": true,
     "rationale": "Travel policy is outside the indexed knowledge base entirely; retrieval should return nothing above the similarity threshold."
@@ -129,7 +157,9 @@
     "case_id": "ESC-015",
     "query": "I got a warning that my antivirus quarantined a file I downloaded from a vendor email.",
     "expected_escalate": true,
-    "expected_trigger_codes": ["POL-006 §3.1"],
+    "expected_trigger_codes": [
+      "POL-006 §3.1"
+    ],
     "trigger_family": "mandatory",
     "threshold_sensitive": false,
     "rationale": "Security-classified ticket: escalation is a blanket rule not subject to confidence override, even when containment already succeeded."
@@ -205,5 +235,201 @@
     "trigger_family": "none",
     "threshold_sensitive": false,
     "rationale": "Classic single-user DNS symptom with an explicit documented fix (POL-007 §2.3). Useful negative case: it shares vocabulary with the multi-user outage scenarios that MUST escalate, so it tests whether the agent distinguishes scope rather than keywords."
+  },
+  {
+    "case_id": "ESC-024",
+    "query": "My laptop is only two years old but I need a much faster one with a dedicated graphics card for rendering work. Can you order it?",
+    "expected_escalate": true,
+    "expected_trigger_codes": [
+      "POL-006 §3.4"
+    ],
+    "trigger_family": "mandatory",
+    "threshold_sensitive": false,
+    "rationale": "Premium equipment beyond the standard allowance on a device still within its refresh cycle: requires documented approval before fulfilment, so the agent may prepare the request but not act on it."
+  },
+  {
+    "case_id": "ESC-025",
+    "query": "Please install the video editing suite I used at my previous company. It is not in the self-service catalog but I really need it this week.",
+    "expected_escalate": true,
+    "expected_trigger_codes": [
+      "POL-004 §3"
+    ],
+    "trigger_family": "mandatory",
+    "threshold_sensitive": false,
+    "rationale": "Non-catalog software must be routed to the Software Approval Board regardless of urgency; the agent must not install it nor promise an approval outcome."
+  },
+  {
+    "case_id": "ESC-026",
+    "query": "Nobody on the finance floor can reach the shared drive this morning, about fifteen people are affected and we are closing the quarter today.",
+    "expected_escalate": true,
+    "expected_trigger_codes": [
+      "POL-006 §3.7"
+    ],
+    "trigger_family": "mandatory",
+    "threshold_sensitive": false,
+    "rationale": "Multi-user impact with a business-critical time window: to be treated as a potential infrastructure incident, not as an individual connectivity ticket."
+  },
+  {
+    "case_id": "ESC-027",
+    "query": "We need fifteen extra seats on the analytics platform for the new regional team, well beyond what we currently license.",
+    "expected_escalate": true,
+    "expected_trigger_codes": [
+      "POL-006 §3.4"
+    ],
+    "trigger_family": "mandatory",
+    "threshold_sensitive": false,
+    "rationale": "Licence purchase exceeding the department's annual budget threshold: requires budget owner approval before purchase."
+  },
+  {
+    "case_id": "ESC-028",
+    "query": "I left my work phone in a taxi this morning. It has company email and the authenticator app on it.",
+    "expected_escalate": true,
+    "expected_trigger_codes": [
+      "POL-006 §3.1"
+    ],
+    "trigger_family": "mandatory",
+    "threshold_sensitive": false,
+    "rationale": "Lost device containing company data: Security category, escalated regardless of the likelihood of recovery."
+  },
+  {
+    "case_id": "ESC-029",
+    "query": "A contractor starts on Monday and needs access to the shared legal folder. I don't have the onboarding form yet but we are in a hurry.",
+    "expected_escalate": true,
+    "expected_trigger_codes": [
+      "POL-006 §3.3"
+    ],
+    "trigger_family": "mandatory",
+    "threshold_sensitive": false,
+    "rationale": "Contractor access without a signed onboarding form: the scope of access is undefined, so the least-privilege requirement cannot be satisfied."
+  },
+  {
+    "case_id": "ESC-030",
+    "query": "Same problem as the one I reported before, it started again. Please fix it.",
+    "expected_escalate": true,
+    "expected_trigger_codes": [
+      "POL-006 §4"
+    ],
+    "trigger_family": "confidence",
+    "threshold_sensitive": true,
+    "rationale": "The reference to an unspecified previous case makes the request unresolvable as written; escalation is preferred over a low-confidence guess."
+  },
+  {
+    "case_id": "ESC-031",
+    "query": "How do I configure the SAP transport route between our development and quality assurance systems?",
+    "expected_escalate": true,
+    "expected_trigger_codes": [
+      "POL-006 §4"
+    ],
+    "trigger_family": "retrieval",
+    "threshold_sensitive": true,
+    "rationale": "An enterprise system covered by no policy and absent from the ticket history: no documented basis exists for an automated answer."
+  },
+  {
+    "case_id": "ESC-032",
+    "query": "My second monitor is not being detected today, it worked fine yesterday.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Routine peripheral issue with a documented diagnostic sequence and close precedents in the ticket history."
+  },
+  {
+    "case_id": "ESC-033",
+    "query": "The codes in my authenticator app no longer match what the login page expects.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Time-sync drift on the requester's device: POL-001 §6 prescribes guiding the user to enable automatic time synchronisation before any account change."
+  },
+  {
+    "case_id": "ESC-034",
+    "query": "Opening files on the operations shared drive is very slow today, it was fine yesterday.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Single-user performance issue with a documented cause to check first (scheduled jobs consuming bandwidth). No multi-user signal is present, which is what separates it from ESC-026."
+  },
+  {
+    "case_id": "ESC-035",
+    "query": "Could you install the standard PDF editor from the approved catalog on my machine?",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Catalog software with an available seat may be fulfilled directly. Deliberately close to ESC-025: the two differ only by catalog membership."
+  },
+  {
+    "case_id": "ESC-036",
+    "query": "My licence for the presentation software expired, can someone renew it?",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Renewal within the standard annual budget requires no additional approval. Contrasts with ESC-027, which exceeds the threshold."
+  },
+  {
+    "case_id": "ESC-037",
+    "query": "A new analyst joins my team next week and needs a standard account with email and access to the team drive.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Standard access request from the hiring manager for non-sensitive resources: resolvable directly."
+  },
+  {
+    "case_id": "ESC-038",
+    "query": "Everything I print comes out faded and streaky.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Consumable replacement with direct precedent; no approval threshold involved."
+  },
+  {
+    "case_id": "ESC-039",
+    "query": "My cloud storage has been stuck on 'processing changes' for over an hour and files are not syncing.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Client-side sync issue resolvable by restarting the client and clearing its cache."
+  },
+  {
+    "case_id": "ESC-040",
+    "query": "We need a distribution list for the regional operations team so we can email everyone at once.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Standard collaboration resource requested by the team manager, who has the authority to request it."
+  },
+  {
+    "case_id": "ESC-041",
+    "query": "My last working day is Friday, HR asked me to open a ticket so IT can process my account and equipment return.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Standard voluntary exit follows the ordinary offboarding procedure. Deliberately close to ESC-010: only involuntary terminations are mandatorily escalated."
+  },
+  {
+    "case_id": "ESC-042",
+    "query": "The CRM crashes every time I open a customer record with large attachments.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Application crash matching a known vendor defect with an available patch: POL-004 §5 prescribes checking known issues first."
+  },
+  {
+    "case_id": "ESC-043",
+    "query": "I received the password reset email but clicked the link a day later and it says the link expired.",
+    "expected_escalate": false,
+    "expected_trigger_codes": [],
+    "trigger_family": "none",
+    "threshold_sensitive": false,
+    "rationale": "Expected behaviour after the 24-hour validity window: reissuing the link resolves it. No suspicious-activity signal is present."
   }
 ]

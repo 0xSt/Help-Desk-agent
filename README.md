@@ -631,7 +631,100 @@ python -m evaluation.run_evaluation --suite escalation --sample 40
 python -m evaluation.run_evaluation --suite answers --judge-sample 20
 ```
 
+### Valutazione RAG con RAGAS, eseguita tramite MLflow
+
+`evaluation/ragas_suite.py` misura quattro criteri **standardizzati**,
+separando ciò che riguarda il recupero da ciò che riguarda la generazione —
+sono i due stadi che si guastano indipendentemente e richiedono rimedi diversi.
+
+| Scorer | Stadio | Domanda |
+|---|---|---|
+| `ragas_context_precision` | recupero | i chunk recuperati sono pertinenti? |
+| `ragas_context_recall` | recupero | il contesto copre quanto serve per rispondere? |
+| `ragas_faithfulness` | generazione | ogni affermazione è sostenuta dal contesto? |
+| `ragas_answer_relevancy` | generazione | la risposta affronta la domanda posta? |
+
+```bash
+uv sync --extra ragas
+python -m evaluation.ragas_suite --sample 20
+```
+
+**Le due librerie fanno cose diverse e non alternative.** RAGAS fornisce le
+*procedure di misura*; MLflow fornisce l'*infrastruttura di valutazione*.
+Ogni metrica RAGAS è quindi avvolta in uno **scorer MLflow** e l'esecuzione
+passa da `mlflow.genai.evaluate`, che si occupa di eseguire il sistema su ogni
+riga, tracciarne l'esecuzione, applicare gli scorer e persistere tutto in un
+run. Il guadagno rispetto a chiamare `ragas.evaluate` e registrare i risultati
+a mano:
+
+- ogni punteggio diventa un *assessment* attaccato alla traccia del singolo
+  caso, quindi dall'aggregato si arriva al caso in un clic;
+- gli scorer RAGAS e quelli nativi MLflow (`RetrievalGroundedness`,
+  `RelevanceToQuery`) girano **nella stessa valutazione, sugli stessi dati**.
+  Se concordano il giudizio è robusto rispetto all'implementazione; se
+  divergono, il numero va preso con cautela — un'informazione che una sola
+  libreria non può dare;
+- il collegamento con versione dei prompt e configurazione è automatico.
+
+Ogni scorer restituisce un `Feedback` con **motivazione e fonte**, non un
+numero nudo: con metriche calcolate da un LLM, un punteggio anomalo può
+dipendere dal sistema valutato o da un giudizio sbagliato, e senza la
+motivazione i due casi sono indistinguibili.
+
+`ragas_context_recall` è l'unico che usa un riferimento, e impiega
+`resolution_summary`. È coerente con la scelta di **non** usarlo per la
+correttezza della risposta: lì sarebbe un confronto fra testi con destinatari
+diversi, qui serve solo a stabilire se il recupero ha trovato le informazioni
+che il riferimento cita.
+
+RAGAS sta in un extra opzionale perché richiede `langchain-community<0.4`, e
+vincolare l'ambiente del servizio a quella versione per una libreria usata solo
+in valutazione sarebbe un accoppiamento ingiustificato.
+
+### Monitoraggio dei prompt
+
+Il prompt è un parametro del sistema al pari di una soglia, ma è l'unico che
+normalmente non compare quando si confrontano due esecuzioni. Se la qualità
+delle risposte cambia, senza versionarlo non si distingue una variazione dovuta
+alla riformulazione delle istruzioni da una dovuta al modello, ai dati o alle
+soglie.
+
+`app/prompts.py` registra i prompt nel **Prompt Registry di MLflow**:
+
+- il prompt dell'agente viene registrato all'avvio del backend;
+- quello del giudice all'avvio di una valutazione — una sua modifica sposta i
+  punteggi senza che il sistema valutato sia cambiato, quindi va tracciata
+  anch'essa;
+- una **nuova versione nasce solo se il testo è effettivamente cambiato**:
+  senza questo confronto ogni riavvio ne creerebbe una identica alla
+  precedente, rendendo illeggibile la cronologia proprio quando serve;
+- l'alias `production` punta sempre alla versione attiva;
+- la versione finisce fra i parametri di ogni run, di avvio e di valutazione.
+
+L'effetto pratico: affiancando due run in MLflow si vede subito se una
+differenza nelle metriche coincide con un cambio di versione del prompt. È il
+modo per rispondere alla domanda "la modifica *risolvi in un solo messaggio* ha
+migliorato o peggiorato il sistema?" con un confronto invece che con
+un'impressione.
+
 ### Scelte di progetto
+
+**Il criterio di scelta della soglia è l'indice J di Youden** (Youden, 1950),
+cioè la massimizzazione di `sensibilità + specificità - 1`, equivalente a
+massimizzare la *balanced accuracy*. È il criterio standard per la selezione di
+un punto di taglio su curva ROC e corrisponde al punto più distante dalla
+diagonale del classificatore casuale. Assume però che i due errori pesino
+ugualmente, ipotesi qui discutibile: l'opzione `--weight-ood` permette di
+riflettere l'asimmetria reale dei costi, lasciando 0,5 come predefinito perché
+è il criterio neutro e difendibile.
+
+**La taratura ha un bias noto e accettato.** Le query "in dominio" usano gli
+stessi campi che vengono indicizzati, quindi appartengono alla stessa
+popolazione linguistica dei documenti: richieste reali, formulate in modo più
+colloquiale, otterrebbero punteggi più bassi. La soglia che ne risulta è
+perciò **ottimistica** e il sistema tende a escalare più del necessario. È un
+*distribution shift* documentato e non corretto: la direzione dell'errore è
+quella prudente, coerente con l'impostazione conservativa dell'escalation.
 
 **La taratura non usa i casi di test.** `calibrate_thresholds.py` confronta la
 distribuzione dei punteggi delle query in dominio con quelle fuori dominio

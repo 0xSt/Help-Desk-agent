@@ -14,7 +14,7 @@
 '   java -jar plantuml.jar -tpng -tsvg -o . docs/diagrams/componenti.puml
 ' ===========================================================================
 
-title Architettura di deployment — quattro servizi containerizzati
+title Componenti e deployment — quattro servizi containerizzati
 
 skinparam backgroundColor #FAFAF9
 skinparam roundCorner 6

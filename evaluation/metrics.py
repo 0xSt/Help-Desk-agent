@@ -35,8 +35,27 @@ precision monitorata come costo operativo. `fbeta` con beta=2 riassume le due
 pesando il recall il quadruplo della precision.
 """
 from collections import Counter
-from dataclasses import dataclass, asdict
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
+from dataclasses import dataclass, field
+from typing import Dict, Iterable, List, Sequence, Set
+
+
+# ==========================================================================
+# Utility condivise
+# ==========================================================================
+
+def percentile(valori: Sequence[float], p: float) -> float:
+    """
+    Percentile per interpolazione al più vicino, con p in [0, 1].
+
+    Definito qui e non duplicato altrove: `calibrate_thresholds.py` importa
+    questa funzione, così le statistiche sui punteggi che compaiono nei due
+    strumenti sono calcolate allo stesso modo e restano confrontabili.
+    """
+    if not valori:
+        return 0.0
+    s = sorted(valori)
+    idx = min(len(s) - 1, max(0, int(round(p * (len(s) - 1)))))
+    return s[idx]
 
 
 # ==========================================================================
@@ -79,11 +98,23 @@ def capped_recall_at_k(retrieved: Sequence[str], relevant: Set[str], k: int) -> 
     return hits / massimo
 
 
-def precision_at_k(retrieved: Sequence[str], relevant: Set[str], k: int) -> float:
-    """Quota dei primi k risultati che sono effettivamente rilevanti."""
+def precision_at_k(retrieved: Sequence[str], relevant: Set[str], k: int,
+                   ignored: Set[str] = frozenset()) -> float:
+    """
+    Quota dei primi k risultati che sono effettivamente rilevanti.
+
+    `ignored` contiene risultati **pertinenti ma non indispensabili**, che non
+    vanno contati né come successo né come errore: vengono rimossi dal
+    denominatore. Serve per la KB delle policy, dove la ground truth
+    (`policy_relevance.json`) distingue le policy `expected`, senza le quali
+    una risposta corretta non è formulabile, da quelle `acceptable`, che sono
+    legittimamente pertinenti. Senza questa esclusione il sistema verrebbe
+    penalizzato per aver recuperato POL-006 su un ticket di escalation, che è
+    esattamente ciò che dovrebbe fare.
+    """
     if k <= 0:
         return 0.0
-    top = retrieved[:k]
+    top = [d for d in retrieved[:k] if d not in ignored or d in relevant]
     if not top:
         return 0.0
     return sum(1 for doc in top if doc in relevant) / len(top)
@@ -114,8 +145,11 @@ class RetrievalCase:
     """Un caso di test per il retrieval."""
     query_id: str
     retrieved_ids: List[str]     # id restituiti, in ordine di ranking
-    relevant_ids: Set[str]       # ground truth
+    relevant_ids: Set[str]       # ground truth: attesi
     top_score: float = 0.0       # punteggio del primo risultato
+    # Risultati pertinenti ma non indispensabili: esclusi dal denominatore
+    # della precision, così non vengono contati come errori.
+    ignored_ids: Set[str] = field(default_factory=set)
 
 
 def aggregate_retrieval(cases: Iterable[RetrievalCase], k: int = 3) -> Dict[str, float]:
@@ -132,7 +166,7 @@ def aggregate_retrieval(cases: Iterable[RetrievalCase], k: int = 3) -> Dict[str,
         return {}
 
     n = len(usable)
-    scores = sorted(c.top_score for c in usable)
+    scores = [c.top_score for c in usable]
     return {
         # Primarie: non hanno il tetto artificiale descritto in capped_recall_at_k.
         f"hit_rate@{k}": sum(hit_rate_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
@@ -140,12 +174,14 @@ def aggregate_retrieval(cases: Iterable[RetrievalCase], k: int = 3) -> Dict[str,
         # Secondarie.
         f"capped_recall@{k}": sum(capped_recall_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
         f"recall@{k}": sum(recall_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
-        f"precision@{k}": sum(precision_at_k(c.retrieved_ids, c.relevant_ids, k) for c in usable) / n,
+        f"precision@{k}": sum(
+            precision_at_k(c.retrieved_ids, c.relevant_ids, k, c.ignored_ids) for c in usable
+        ) / n,
         "n_cases": float(n),
         # Statistiche sui punteggi, per la taratura delle soglie.
         "top_score_mean": sum(scores) / n,
-        "top_score_p10": scores[max(0, int(0.10 * n) - 1)],
-        "top_score_median": scores[n // 2],
+        "top_score_p10": percentile(scores, 0.10),
+        "top_score_median": percentile(scores, 0.50),
     }
 
 
@@ -163,10 +199,22 @@ class ConfusionMatrix:
 
     @property
     def total(self) -> int:
+        """Numero di casi valutati. Denominatore dell'accuracy."""
         return self.tp + self.fp + self.fn + self.tn
 
     @property
     def precision(self) -> float:
+        """
+        Quota di escalation effettivamente necessarie fra quelle decise.
+
+        Qui misura un **costo operativo**, non la correttezza: una precision
+        bassa significa che gli operatori ricevono ticket che l'agente avrebbe
+        potuto chiudere. È un problema di efficienza, non di sicurezza, e per
+        questo resta subordinata al recall.
+
+        Ritorna 0.0 quando il sistema non ha escalato nulla: la metrica non
+        sarebbe definita, e 0.0 è il valore che non premia quel comportamento.
+        """
         d = self.tp + self.fp
         return self.tp / d if d else 0.0
 
@@ -200,6 +248,15 @@ class ConfusionMatrix:
         return (1 + b2) * p * r / (b2 * p + r)
 
     def as_metrics(self, prefix: str = "escalation") -> Dict[str, float]:
+        """
+        Espone l'intera matrice come dizionario piatto, pronto per MLflow.
+
+        Include i quattro conteggi grezzi oltre alle metriche derivate: sono
+        loro a permettere di ricostruire qualunque altra misura a posteriori,
+        e soprattutto di capire se un valore anomalo dipende da un caso
+        isolato o da un comportamento sistematico. Con campioni di poche
+        decine di casi la differenza è sostanziale.
+        """
         return {
             f"{prefix}/true_positives": float(self.tp),
             f"{prefix}/false_positives": float(self.fp),
@@ -214,6 +271,15 @@ class ConfusionMatrix:
 
 
 def confusion_matrix(predicted: Sequence[bool], expected: Sequence[bool]) -> ConfusionMatrix:
+    """
+    Costruisce la matrice di confusione dai due elenchi appaiati per posizione.
+
+    L'accoppiamento è posizionale, quindi un disallineamento di lunghezza
+    produrrebbe silenziosamente una matrice sbagliata: viene sollevata
+    un'eccezione esplicita invece di lasciare che `zip` tronchi la sequenza
+    più lunga, perché un errore di misura passato inosservato è peggiore di
+    un errore che interrompe l'esecuzione.
+    """
     if len(predicted) != len(expected):
         raise ValueError(
             f"predicted ({len(predicted)}) ed expected ({len(expected)}) hanno lunghezza diversa"
@@ -330,9 +396,36 @@ def evaluate_escalation(cases: Sequence[EscalationCase]) -> Dict[str, float]:
 # Utility
 # ==========================================================================
 
+def sanitize_metric_name(name: str) -> str:
+    """
+    Rende un nome di metrica accettabile da MLflow.
+
+    MLflow ammette solo lettere, cifre, underscore, trattini, punti, spazi,
+    barre e due punti. I nostri nomi contengono i codici di policy, e il
+    carattere di sezione (§) non è fra quelli ammessi: `log_metrics` rifiuta
+    **l'intero batch** se anche un solo nome è invalido, quindi senza questa
+    normalizzazione andrebbero perse *tutte* le metriche, non solo quelle con
+    il carattere incriminato.
+
+    La sostituzione mantiene leggibile la corrispondenza con la clausola di
+    origine: "trigger/POL-006 §3.1/recall" diventa
+    "trigger/POL-006_sec3.1/recall".
+    """
+    pulito = name.replace("§", "sec").replace(" ", "_")
+    return "".join(c for c in pulito if c.isalnum() or c in "_-./: ")
+
+
 def flatten_metrics(*groups: Dict[str, float]) -> Dict[str, float]:
-    """Unisce più dizionari di metriche, per un singolo `mlflow.log_metrics`."""
+    """
+    Unisce più dizionari di metriche, normalizzandone i nomi per MLflow.
+
+    La normalizzazione avviene qui, in un unico punto attraversato da tutte le
+    metriche prima di essere registrate, invece che nei singoli produttori:
+    così le funzioni di misura restano libere di usare i nomi naturali del
+    dominio, con i codici di policy scritti per esteso.
+    """
     out: Dict[str, float] = {}
     for g in groups:
-        out.update(g)
+        for k, v in g.items():
+            out[sanitize_metric_name(k)] = v
     return out

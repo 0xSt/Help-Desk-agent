@@ -24,8 +24,10 @@ import logging
 from pathlib import Path
 import random
 import uuid
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Set
 
+from app import config
 from app.retrieval import search_kb_docs, search_kb_tickets
 from evaluation.metrics import (
     EscalationCase,
@@ -104,6 +106,13 @@ def stratified_sample(cases: List[Dict[str, Any]], n: int,
 
     Il seed è fisso: due esecuzioni consecutive devono valutare lo stesso
     campione, altrimenti le differenze tra run sono rumore e non segnale.
+
+    ATTENZIONE ALLA NUMEROSITÀ MINIMA. Ogni gruppo contribuisce con almeno un
+    caso (`max(1, ...)`), quindi il campione non può scendere sotto il numero
+    di gruppi: con 20 sottocategorie, chiedere 6 casi ne restituisce comunque
+    20. È voluto — un campione che ignora del tutto le sottocategorie meno
+    numerose non è rappresentativo — ma va conosciuto quando il costo per caso
+    è alto, come nelle suite che impiegano un modello giudice.
     """
     if n <= 0 or n >= len(cases):
         return cases
@@ -335,10 +344,16 @@ def run_retrieval_suite(k: int = 3, sample: int = 0) -> Dict[str, float]:
             pid = r.get("policy_id")
             if pid and pid not in recuperati_d:
                 recuperati_d.append(pid)
-        attese = set(rilevanza.get(subcat, {}).get("expected", []))
+        mappa = rilevanza.get(subcat, {})
+        attese = set(mappa.get("expected", []))
+        # Le policy "acceptable" sono pertinenti ma non indispensabili: non
+        # contano come successo nel recall, ma non devono nemmeno essere
+        # contate come errore nella precision (vedi policy_relevance.json).
+        tollerate = set(mappa.get("acceptable", []))
         casi_docs.append(RetrievalCase(
             query_id=tid, retrieved_ids=recuperati_d, relevant_ids=attese,
             top_score=risultati_d[0]["score"] if risultati_d else 0.0,
+            ignored_ids=tollerate,
         ))
 
         per_caso.append({
@@ -349,6 +364,7 @@ def run_retrieval_suite(k: int = 3, sample: int = 0) -> Dict[str, float]:
             "tickets_top_score": round(risultati_t[0]["score"], 4) if risultati_t else 0.0,
             "docs_retrieved": ", ".join(recuperati_d),
             "docs_expected": ", ".join(sorted(attese)),
+            "docs_acceptable": ", ".join(sorted(tollerate)),
             "docs_hit": bool(set(recuperati_d) & attese),
             "docs_top_score": round(risultati_d[0]["score"], 4) if risultati_d else 0.0,
         })
@@ -381,7 +397,7 @@ def run_answer_quality_suite(sample: int = 20) -> Dict[str, float]:
     """
     from evaluation.judge import aggrega, giudica
 
-    if not config_modulo().GEMINI_API_KEY:
+    if not config.GEMINI_API_KEY:
         logger.warning("Suite 'answers' saltata: richiede una chiave API attiva.")
         return {}
 
@@ -412,11 +428,6 @@ def run_answer_quality_suite(sample: int = 20) -> Dict[str, float]:
     return aggrega(giudizi, totale_casi=len(cases))
 
 
-def config_modulo():
-    from app import config
-    return config
-
-
 # ==========================================================================
 # Entrypoint
 # ==========================================================================
@@ -445,29 +456,78 @@ def _log_table(rows: List[Dict[str, Any]], name: str) -> None:
         logger.warning("MLflow non disponibile: tabella scritta in %s", out)
 
 
-def log_to_mlflow(metrics: Dict[str, float], suite: str) -> None:
+@contextmanager
+def mlflow_run(suite: str, enabled: bool):
     """
-    Registra metriche e configurazione come run MLflow.
+    Apre il run MLflow **prima** dell'esecuzione delle suite.
 
-    Loggare `config.as_params()` insieme alle metriche è ciò che rende i run
-    confrontabili: senza sapere con quali soglie e quale modello è stato
-    prodotto un risultato, il numero da solo non dice nulla e non si possono
-    confrontare due configurazioni.
+    L'ordine non è un dettaglio. `mlflow.log_table`, usato per salvare il
+    dettaglio per caso, richiede un run attivo e ne apre uno implicitamente se
+    non lo trova: aprendo il run solo alla fine, per registrare le metriche, le
+    tabelle sarebbero finite in un run diverso da quello delle metriche che
+    devono spiegare — e il secondo `start_run` avrebbe comunque fallito,
+    trovandone già uno attivo.
+
+    Registra come parametri sia la configurazione sia la versione dei prompt:
+    è ciò che rende confrontabili due valutazioni a distanza di tempo.
     """
+    if not enabled:
+        yield
+        return
+
     try:
         import mlflow
-        from app import config
+
+        from app import prompts
+        from evaluation.judge import JUDGE_PROMPT
+
+        # Registrati prima di aprire il run: le metriche di una valutazione
+        # vanno attribuite tanto al prompt dell'agente quanto a quello del
+        # giudice, perché una modifica del secondo sposta i punteggi senza che
+        # il sistema valutato sia cambiato.
+        prompts.register_agent_prompt()
+        prompts.ensure_registered(prompts.JUDGE_PROMPT_NAME, JUDGE_PROMPT,
+                                  commit_message="Prompt del giudice di valutazione")
 
         mlflow.set_experiment(f"{config.MLFLOW_EXPERIMENT}-eval")
         with mlflow.start_run(run_name=f"eval-{suite}"):
             mlflow.log_params(config.as_params())
-            mlflow.log_metrics(metrics)
-            logger.info("Metriche registrate su MLflow (suite=%s).", suite)
+            mlflow.log_params(prompts.as_params())
+            yield
+            logger.info("Run di valutazione registrato su MLflow (suite=%s).", suite)
+
     except Exception:
-        logger.exception("Logging su MLflow fallito: le metriche restano solo a video.")
+        logger.exception("Registrazione su MLflow fallita: le metriche restano solo a video.")
+        yield
+
+
+def log_metrics(metrics: Dict[str, float]) -> None:
+    """Registra le metriche nel run già aperto da `mlflow_run`."""
+    if not metrics:
+        return
+    try:
+        import mlflow
+
+        if mlflow.active_run() is not None:
+            mlflow.log_metrics(metrics)
+    except Exception:
+        logger.warning("Impossibile registrare le metriche.", exc_info=True)
 
 
 def main() -> int:
+    """
+    Punto d'ingresso da riga di comando.
+
+    Le suite girano **dentro** il contesto del run MLflow, non prima: le
+    tabelle per caso vengono scritte durante l'esecuzione e devono finire nel
+    medesimo run delle metriche che spiegano. Aprire il run solo alla fine le
+    disperderebbe in un run separato.
+
+    Le metriche vengono comunque stampate a video anche quando la
+    registrazione fallisce: uno strumento di misura che non produce un
+    risultato leggibile perché è indisponibile la telemetria sarebbe inutile
+    proprio nelle situazioni in cui serve di più.
+    """
     parser = argparse.ArgumentParser(description="Evaluation del sistema di help desk")
     parser.add_argument(
         "--suite",
@@ -485,23 +545,22 @@ def main() -> int:
     args = parser.parse_args()
 
     groups = []
-    if args.suite in ("retrieval", "all"):
-        groups.append(run_retrieval_suite(k=args.k, sample=args.sample))
-    if args.suite in ("escalation-a", "escalation", "all"):
-        groups.append(run_escalation_suite_a(sample=args.sample))
-    if args.suite in ("escalation-b", "escalation", "all"):
-        groups.append(run_escalation_suite_b())
-    if args.suite in ("answers", "all"):
-        groups.append(run_answer_quality_suite(sample=args.judge_sample))
+    with mlflow_run(args.suite, enabled=not args.no_mlflow):
+        if args.suite in ("retrieval", "all"):
+            groups.append(run_retrieval_suite(k=args.k, sample=args.sample))
+        if args.suite in ("escalation-a", "escalation", "all"):
+            groups.append(run_escalation_suite_a(sample=args.sample))
+        if args.suite in ("escalation-b", "escalation", "all"):
+            groups.append(run_escalation_suite_b())
+        if args.suite in ("answers", "all"):
+            groups.append(run_answer_quality_suite(sample=args.judge_sample))
 
-    metrics = flatten_metrics(*groups)
+        metrics = flatten_metrics(*groups)
+        log_metrics(metrics)
 
     print(f"\n=== Risultati (suite={args.suite}) ===")
     for name, value in sorted(metrics.items()):
         print(f"  {name:45s} {value:.4f}")
-
-    if not args.no_mlflow and metrics:
-        log_to_mlflow(metrics, args.suite)
 
     return 0
 

@@ -42,8 +42,6 @@ skinparam note {
 actor "Manutentore\ndel sistema" as Admin
 
 actor "Servizio LLM\n(Gemini)" as LLM
-actor "Base di conoscenza\n(Qdrant)" as KB
-actor "MLflow" as ML
 
 rectangle "Sistema di help desk — amministrazione" {
 
@@ -68,6 +66,9 @@ Admin --> UC12
 Admin --> UC13
 Admin --> UC15
 
+' Qdrant e MLflow non sono attori: sono servizi interni al sistema.
+' Solo l'API Gemini è di terze parti.
+
 ' --- l'avvio comprende sempre la sincronizzazione dell'indice ---
 UC09 ..> UC10 : <<include>>
 
@@ -80,11 +81,9 @@ UC13c --|> UC13
 UC13 ..> UC14 : <<include>>
 
 ' --- attori secondari ---
-UC10 --> KB
 UC10 --> LLM
 UC11 --> LLM
 UC13c --> LLM
-UC14 --> ML
 
 note bottom of UC10
   Un solo caso d'uso per creazione e

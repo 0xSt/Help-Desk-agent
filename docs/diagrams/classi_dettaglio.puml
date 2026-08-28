@@ -174,7 +174,7 @@ TicketSignals ..> TicketCategory
 
 EscalationDecision *-- "0..*" Trigger
 
-TicketSignals ..> EscalationDecision : decide(signals,\nconfidence, kb_*)
+EscalationDecision ..> TicketSignals : <<use>>\nprodotta valutando i segnali,\nla confidenza e gli score di retrieval
 AgentState ..> DraftAnswer : popolato da
 AgentState ..> EscalationDecision : popolato da
 

@@ -114,6 +114,9 @@ Resta aperto:
       raccolti finora vengono dalla modalità mock e non dicono nulla sul
       sistema reale.
 - [ ] **Rimisurare dopo la modifica al prompt "risolvi in un messaggio".**
+      Ora è possibile in modo rigoroso: il prompt registry versiona il testo e
+      ne registra la versione nei parametri di ogni run, quindi i due
+      confronti sono affiancabili in MLflow.
       Chiedere risposte autosufficienti cambia il testo generato e può
       spostare la confidenza dichiarata, quindi tocca proprio i segnali su cui
       si regge l'escalation §4. Le suite vanno rieseguite prima e dopo la
@@ -121,6 +124,16 @@ Resta aperto:
       groundedness è l'indicatore da sorvegliare: il rischio specifico di
       questo prompt è che il modello colmi i vuoti inventando procedura pur di
       non fare domande.
+- [ ] **Limite noto della calibrazione**: la popolazione "in dominio" usa
+      `subject + description` dei ticket come query, cioè testi quasi identici
+      a quelli indicizzati. Le richieste reali sono formulate diversamente,
+      quindi la soglia calibrata è **ottimistica**. Da mitigare parafrasando un
+      campione di ticket, o accettando il bias e documentandolo.
+- [ ] **Eseguire la suite RAGAS con una chiave attiva.** Il modulo è scritto
+      contro l'API verificata (costruzione di modelli, metriche e dataset
+      provata in un ambiente isolato) ma **le chiamate reali non sono mai
+      state eseguite**, perché l'ambiente di sviluppo non raggiunge l'API
+      Gemini. Da provare prima di citarne i numeri.
 - [ ] **Confrontare un giudice diverso dal modello valutato.** `JUDGE_MODEL`
       è configurabile apposta: un giudice che condivide con l'esaminato gli
       stessi punti ciechi tende a non vederne gli errori.
@@ -158,11 +171,20 @@ negativi).
 - [x] **Diagramma di attività** — `attivita_escalation.puml`, con swimlane
       modello / motore di regole / operatore.
 
-Tutti e sei i diagrammi UML sono in `docs/diagrams/` come sorgente PlantUML
-più PNG e SVG. Resta il **documento di specifica dei requisiti**.
-- [ ] **Documento di specifica dei requisiti** (IEEE 830 / ISO 29148) con
-      matrice di tracciabilità requisito → policy di origine → componente →
-      test che lo verifica.
+Tutti e sette i diagrammi UML sono in `docs/diagrams/` come sorgente PlantUML
+più PNG e SVG.
+
+Revisione di correttezza eseguita: corrette due incoerenze di modellazione
+(confine di sistema disallineato fra casi d'uso e componenti; dipendenza
+invertita fra `TicketSignals` ed `EscalationDecision`).
+- [x] **Documento di specifica dei requisiti** — `docs/SRS.md`, 71 requisiti
+      funzionali e 7 non funzionali, con matrice di tracciabilità. PDF
+      generabile con:
+      `pandoc docs/SRS.md -o docs/SRS.pdf --pdf-engine=xelatex`
+- [ ] **Rileggere le verifiche citate nei requisiti** dopo aver eseguito
+      l'evaluation con Gemini: alcune rimandano a suite i cui esiti reali non
+      sono ancora noti, e le soglie in RNF-06 (richiamo ≥ 0,90) sono un
+      obiettivo dichiarato, non un risultato misurato.
 
 ## P2 — Rifiniture
 
