@@ -106,6 +106,13 @@ def stratified_sample(cases: List[Dict[str, Any]], n: int,
 
     Il seed è fisso: due esecuzioni consecutive devono valutare lo stesso
     campione, altrimenti le differenze tra run sono rumore e non segnale.
+
+    ATTENZIONE ALLA NUMEROSITÀ MINIMA. Ogni gruppo contribuisce con almeno un
+    caso (`max(1, ...)`), quindi il campione non può scendere sotto il numero
+    di gruppi: con 20 sottocategorie, chiedere 6 casi ne restituisce comunque
+    20. È voluto — un campione che ignora del tutto le sottocategorie meno
+    numerose non è rappresentativo — ma va conosciuto quando il costo per caso
+    è alto, come nelle suite che impiegano un modello giudice.
     """
     if n <= 0 or n >= len(cases):
         return cases

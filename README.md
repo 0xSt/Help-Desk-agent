@@ -631,39 +631,55 @@ python -m evaluation.run_evaluation --suite escalation --sample 40
 python -m evaluation.run_evaluation --suite answers --judge-sample 20
 ```
 
-### Valutazione RAG con RAGAS
+### Valutazione RAG con RAGAS, eseguita tramite MLflow
 
-`evaluation/ragas_suite.py` affianca al giudice interno quattro metriche
-**standardizzate**, calcolate con procedure pubblicate:
+`evaluation/ragas_suite.py` misura quattro criteri **standardizzati**,
+separando ciò che riguarda il recupero da ciò che riguarda la generazione —
+sono i due stadi che si guastano indipendentemente e richiedono rimedi diversi.
 
-| Metrica | Stadio | Domanda |
+| Scorer | Stadio | Domanda |
 |---|---|---|
-| `context_precision_without_reference` | recupero | i chunk recuperati sono pertinenti? |
-| `context_recall` | recupero | il contesto copre quanto serve per rispondere? |
-| `faithfulness` | generazione | ogni affermazione è sostenuta dal contesto? |
-| `answer_relevancy` | generazione | la risposta affronta la domanda posta? |
+| `ragas_context_precision` | recupero | i chunk recuperati sono pertinenti? |
+| `ragas_context_recall` | recupero | il contesto copre quanto serve per rispondere? |
+| `ragas_faithfulness` | generazione | ogni affermazione è sostenuta dal contesto? |
+| `ragas_answer_relevancy` | generazione | la risposta affronta la domanda posta? |
 
 ```bash
 uv sync --extra ragas
 python -m evaluation.ragas_suite --sample 20
 ```
 
-**Non sostituisce `judge.py`, lo affianca.** Il giudice interno risponde a
-"questa risposta rispetta le *nostre* policy?", che nessuna libreria generica
-può sapere; RAGAS risponde a "questa pipeline è buona secondo criteri
-riconosciuti?". Per una tesi la seconda ha un valore specifico: `faithfulness
-0,82` è interpretabile da un lettore esterno senza leggere il nostro prompt di
-giudizio.
+**Le due librerie fanno cose diverse e non alternative.** RAGAS fornisce le
+*procedure di misura*; MLflow fornisce l'*infrastruttura di valutazione*.
+Ogni metrica RAGAS è quindi avvolta in uno **scorer MLflow** e l'esecuzione
+passa da `mlflow.genai.evaluate`, che si occupa di eseguire il sistema su ogni
+riga, tracciarne l'esecuzione, applicare gli scorer e persistere tutto in un
+run. Il guadagno rispetto a chiamare `ragas.evaluate` e registrare i risultati
+a mano:
 
-`context_recall` è l'unica che usa un riferimento, e qui si usa
+- ogni punteggio diventa un *assessment* attaccato alla traccia del singolo
+  caso, quindi dall'aggregato si arriva al caso in un clic;
+- gli scorer RAGAS e quelli nativi MLflow (`RetrievalGroundedness`,
+  `RelevanceToQuery`) girano **nella stessa valutazione, sugli stessi dati**.
+  Se concordano il giudizio è robusto rispetto all'implementazione; se
+  divergono, il numero va preso con cautela — un'informazione che una sola
+  libreria non può dare;
+- il collegamento con versione dei prompt e configurazione è automatico.
+
+Ogni scorer restituisce un `Feedback` con **motivazione e fonte**, non un
+numero nudo: con metriche calcolate da un LLM, un punteggio anomalo può
+dipendere dal sistema valutato o da un giudizio sbagliato, e senza la
+motivazione i due casi sono indistinguibili.
+
+`ragas_context_recall` è l'unico che usa un riferimento, e impiega
 `resolution_summary`. È coerente con la scelta di **non** usarlo per la
 correttezza della risposta: lì sarebbe un confronto fra testi con destinatari
 diversi, qui serve solo a stabilire se il recupero ha trovato le informazioni
-che quel riferimento cita.
+che il riferimento cita.
 
 RAGAS sta in un extra opzionale perché richiede `langchain-community<0.4`, e
-vincolare l'ambiente del servizio a quella versione per una libreria usata
-solo in valutazione sarebbe un accoppiamento ingiustificato.
+vincolare l'ambiente del servizio a quella versione per una libreria usata solo
+in valutazione sarebbe un accoppiamento ingiustificato.
 
 ### Monitoraggio dei prompt
 
