@@ -3,7 +3,7 @@ schemas.py
 ==========
 Modelli Pydantic per le richieste/risposte esposte da FastAPI.
 """
-from typing import Optional, List, Dict
+from typing import Any, Optional, List, Dict
 from pydantic import BaseModel
 
 
@@ -30,6 +30,14 @@ class ChatResponse(BaseModel):
     # la clausola di policy che lo giustifica. L'operatore vede così *tutti* i
     # motivi, non solo il primo riassunto in `review_reason`.
     escalation_triggers: Optional[List[Dict[str, str]]] = None
+    # Contesto recuperato dalle due knowledge base, mostrato per intero
+    # all'operatore: è il materiale su cui la bozza è stata costruita e su cui
+    # l'operatore deve poter giudicare se sia corretta.
+    # Messaggio in attesa di risposta: completa la conversazione mostrata
+    # all'operatore, dato che non è ancora entrato nella cronologia.
+    current_message: Optional[str] = None
+    kb_docs_context: Optional[List[Dict[str, Any]]] = None
+    kb_tickets_context: Optional[List[Dict[str, Any]]] = None
 
 
 class TicketSummary(BaseModel):

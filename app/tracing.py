@@ -131,8 +131,22 @@ def trace_span(name: str, attributes: Optional[Dict[str, Any]] = None):
 
     Se MLflow non è disponibile ritorna la funzione invariata, così il codice
     decorato resta eseguibile senza la dipendenza.
+
+    Rispetta `MLFLOW_ENABLED`. Il controllo è necessario e non ridondante: il
+    decoratore viene applicato **all'import del modulo**, mentre
+    `setup_tracing()` viene chiamata all'avvio dell'applicazione. Senza questa
+    verifica gli span espliciti verrebbero registrati comunque, anche a
+    tracing disattivato, creando uno store MLflow locale in processi che non
+    devono produrne — il job di ingestion, per esempio, gira proprio con
+    `MLFLOW_ENABLED=false` e non ha motivo di scrivere trace.
+
+    La decisione è presa una volta sola, al momento della decorazione: attivare
+    il tracing a processo avviato richiede comunque un riavvio, dato che
+    l'autolog si configura all'avvio.
     """
     def decorator(fn):
+        if not config.MLFLOW_ENABLED:
+            return fn
         try:
             import mlflow
 
