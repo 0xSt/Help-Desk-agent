@@ -1,31 +1,3 @@
-"""
-ingest.py
-=========
-Entrypoint del **job di ingestion**: popola le collection Qdrant a partire dai
-file in `app/knowledge_base/`, poi termina.
-
-    python -m app.ingest
-
-In Docker Compose gira come servizio one-shot che deve completare con successo
-prima che il backend accetti richieste (`depends_on: service_completed_successfully`).
-Il motivo per cui è un servizio a sé e non codice eseguito all'avvio del
-backend: se il backend scalasse a più repliche, ciascuna proverebbe a
-indicizzare in parallelo la stessa collection. Con un job dedicato
-l'ingestion avviene una volta sola, in un punto ben definito del ciclo di vita.
-
-Comportamento (requisito di deploy): **se una collection non esiste viene
-creata e popolata, altrimenti viene aggiornata** in modo incrementale — vedi
-`sync_collection` in `app/retrieval.py`. Un riavvio senza modifiche alla
-knowledge base non produce nessuna chiamata all'API di embedding.
-
-Attesa di Qdrant
-----------------
-Il container di Qdrant può non essere ancora pronto quando questo job parte.
-Invece di affidarsi solo all'ordine di avvio dichiarato nel compose, il job
-riprova a connettersi con backoff: è più robusto di un healthcheck, perché
-verifica proprio l'operazione che ci interessa (interrogare le collection) e
-non un generico "la porta risponde".
-"""
 import logging
 import sys
 import time

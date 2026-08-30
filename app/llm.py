@@ -1,31 +1,3 @@
-"""
-llm.py
-======
-Wrapper attorno al modello linguistico (**Google Gemini**, via SDK
-`google-genai`), con la persona dell'assistente di help desk IT di
-un'azienda informatica fittizia (scenario del progetto, azienda senza nome).
-
-Due cambiamenti importanti rispetto alla versione precedente:
-
-1. **Structured output nativo.** Prima chiedevamo al modello "rispondi solo
-   con JSON" e facevamo `json.loads` sperando bene. Gemini accetta uno schema
-   Pydantic in `response_schema` e garantisce una risposta conforme: il
-   parsing non è più un punto di rottura.
-
-2. **Il modello non decide più l'escalation, la osserva.** Oltre alla bozza e
-   alla confidenza, restituisce un insieme di **segnali** strutturati sul
-   ticket (categoria, priorità, presenza di approvazioni, impatto multi-utente,
-   richiesta esplicita di un umano...). La decisione vera e propria è presa in
-   `app/escalation.py` da codice deterministico e verificabile. Separare
-   "capire il testo" (compito del modello) da "decidere" (compito di regole
-   ispezionabili) rende la decisione spiegabile e testabile — requisito
-   sostanziale, dato che POL-006 §3 impone certe escalation *a prescindere*
-   dal giudizio del modello.
-
-Senza `GEMINI_API_KEY` il modulo entra in **modalità mock**: produce risposte e
-segnali finti ma coerenti, così l'intero flusso (incluso interrupt/resume di
-LangGraph) resta provabile senza credenziali e senza costi.
-"""
 import logging
 from typing import Any, Dict, List, Literal, Optional
 

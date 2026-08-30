@@ -448,7 +448,7 @@ def _exclusion_filter(exclude_sources: Optional[Sequence[str]]):
     ])
 
 
-@trace_span("retrieval.kb_docs")
+@trace_span("retrieval.kb_docs", span_type="RETRIEVER")
 def search_kb_docs(
     query: str,
     k: int = config.RETRIEVAL_TOP_K,
@@ -469,7 +469,7 @@ def search_kb_docs(
         return []
 
 
-@trace_span("retrieval.kb_tickets")
+@trace_span("retrieval.kb_tickets", span_type="RETRIEVER")
 def search_kb_tickets(
     query: str,
     k: int = config.RETRIEVAL_TOP_K,
