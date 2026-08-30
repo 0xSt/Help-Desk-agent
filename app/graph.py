@@ -181,13 +181,25 @@ def human_review_node(state: AgentState) -> Dict[str, Any]:
     collaterali PRIMA di interrupt() in questo nodo, verrebbe eseguito due volte.
     """
     corrected_answer = interrupt({
+        # Il messaggio che ha innescato l'escalation non è ancora in
+        # `history`, che viene scritta solo da `finalize_node` a risoluzione
+        # avvenuta. Senza portarlo qui, la console dovrebbe recuperarlo dalla
+        # coda dei ticket: un'informazione essenziale della conversazione
+        # dipenderebbe da una lista aggiornata per polling.
+        "user_query": state["user_query"],
         "draft_answer": state["draft_answer"],
         "reason": state["review_reason"],
         "confidence": state["confidence"],
-        # L'elenco completo dei trigger accompagna il ticket fino alla console
-        # operatore: POL-006 §5.2 chiede che al ticket escalato sia allegato
-        # il contesto completo, incluso il motivo specifico dell'escalation.
+        # I trigger continuano ad accompagnare il ticket anche se la console
+        # non li mostra più: sono il dato su cui l'evaluation misura
+        # l'accuratezza per singolo segnale, e restano disponibili nelle
+        # tracce e nella risposta API per la diagnosi.
         "triggers": state.get("escalation_triggers", []),
+        # POL-006 §5.2 richiede che al ticket escalato sia allegato il
+        # contesto completo. È ciò che l'operatore usa per decidere: i
+        # passaggi di policy e i ticket storici che hanno prodotto la bozza.
+        "kb_docs": state.get("kb_docs_context", []),
+        "kb_tickets": state.get("kb_tickets_context", []),
     })
     return {"final_answer": corrected_answer, "reviewed_by_human": True}
 

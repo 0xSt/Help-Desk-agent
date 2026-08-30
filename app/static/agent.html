@@ -107,22 +107,35 @@
     letter-spacing: 0.04em; text-transform: uppercase; color: var(--review);
     margin-bottom: 8px;
   }
-  .review-panel .reason { font-size: 13px; color: #6b4d0f; margin-bottom: 4px; }
-  .trigger-list {
-    list-style: none; margin: 0 0 10px; padding: 0;
-    display: flex; flex-direction: column; gap: 5px;
-  }
-  .trigger-list li {
-    display: flex; gap: 8px; align-items: baseline;
-    font-size: 12.5px; color: #6b4d0f;
-  }
-  .trigger-code {
-    flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
-    padding: 1px 6px; border-radius: 5px;
-    background: #fff; border: 1px solid var(--review-border);
-  }
-  .trigger-kind-mandatory .trigger-code { color: #b3392f; border-color: #b3392f; }
   .review-panel .confidence { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
+
+  /* --- Contesto recuperato dalle due knowledge base --- */
+  .context-block { display: flex; flex-direction: column; gap: 10px; }
+  .context-block h3 {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim);
+    margin: 4px 0 0;
+  }
+  .context-empty { font-size: 13px; color: var(--text-dim); font-style: italic; }
+  .context-item {
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); padding: 10px 12px;
+  }
+  .context-item .head {
+    display: flex; gap: 8px; align-items: baseline; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .context-item .src {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ai);
+  }
+  .context-item .score {
+    font-family: var(--mono); font-size: 10.5px; color: var(--text-dim);
+    border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px;
+  }
+  .context-item .body {
+    font-size: 13px; line-height: 1.5; color: var(--text);
+    white-space: pre-wrap; max-height: 260px; overflow-y: auto;
+  }
   .review-panel textarea {
     width: 100%; min-height: 140px; resize: vertical;
     font-family: var(--sans); font-size: 14px; line-height: 1.5; padding: 10px;
@@ -258,17 +271,45 @@
     renderDetail(ticketId, data);
   }
 
-  // Elenco completo dei segnali che hanno causato l'escalation. Quelli
-  // "mandatory" derivano da regole di policy non aggirabili e sono
-  // evidenziati diversamente dai segnali di confidenza/retrieval.
-  function renderTriggers(triggers) {
-    if (!triggers || !triggers.length) return '';
-    const items = triggers.map(t => `
-      <li class="trigger-kind-${escapeHtml(t.kind)}">
-        <span class="trigger-code">${escapeHtml(t.code)}</span>
-        <span>${escapeHtml(t.description)}</span>
-      </li>`).join('');
-    return `<ul class="trigger-list">${items}</ul>`;
+  // Contesto recuperato dalle due knowledge base, mostrato per intero.
+  //
+  // È ciò su cui l'operatore giudica: non gli si dice quale regola ha fatto
+  // scattare l'escalation, gli si mette davanti il materiale su cui la bozza
+  // è stata costruita, così può valutarla nel merito. Il punteggio di
+  // similarità accompagna ogni elemento perché indica quanto il sistema lo
+  // considerasse pertinente, informazione utile a capire se la bozza poggia
+  // su basi solide o su appigli deboli.
+  function renderContext(items, titolo, vuoto) {
+    const blocco = document.createElement('div');
+    blocco.className = 'context-block';
+    const h = document.createElement('h3');
+    h.textContent = titolo;
+    blocco.appendChild(h);
+
+    if (!items || !items.length) {
+      const p = document.createElement('p');
+      p.className = 'context-empty';
+      p.textContent = vuoto;
+      blocco.appendChild(p);
+      return blocco;
+    }
+
+    items.forEach(it => {
+      const card = document.createElement('div');
+      card.className = 'context-item';
+      const score = it.score != null ? it.score.toFixed(3) : 'n/a';
+      card.innerHTML = `
+        <div class="head">
+          <span class="src">${escapeHtml(it.source || '—')}</span>
+          <span class="score">similarity ${score}</span>
+        </div>
+        <div class="body"></div>`;
+      // textContent e non innerHTML: il testo arriva dalla knowledge base e
+      // non deve poter iniettare markup nella console.
+      card.querySelector('.body').textContent = it.text || '';
+      blocco.appendChild(card);
+    });
+    return blocco;
   }
 
   function renderDetail(ticketId, data) {
@@ -288,14 +329,15 @@
       m.textContent = turn.content;
       transcript.appendChild(m);
     });
-    // Il messaggio corrente (quello che ha innescato l'escalation) non è
-    // ancora in 'history' (viene aggiunto solo da finalize_node a risoluzione
-    // avvenuta) — lo aggiungiamo qui a parte, leggendolo dalla coda.
-    const ticketInfo = currentQueue.find(t => t.ticket_id === ticketId);
-    if (ticketInfo) {
+    // Il messaggio in attesa di risposta non è ancora in 'history', che
+    // finalize_node scrive solo a risoluzione avvenuta: arriva quindi a parte
+    // nel payload del ticket. Prima veniva recuperato dalla coda, il che
+    // faceva dipendere una parte essenziale della conversazione da una lista
+    // aggiornata per polling.
+    if (data.current_message) {
       const m = document.createElement('div');
       m.className = 'msg user';
-      m.textContent = ticketInfo.subject;
+      m.textContent = data.current_message;
       transcript.appendChild(m);
     }
     detail.appendChild(transcript);
@@ -312,8 +354,6 @@
     panel.className = 'review-panel';
     panel.innerHTML = `
       <div class="label">AI-generated draft — requires your review</div>
-      <div class="reason">${escapeHtml(data.review_reason || 'No reason specified.')}</div>
-      ${renderTriggers(data.escalation_triggers)}
       <div class="confidence">model confidence: ${data.confidence != null ? data.confidence.toFixed(2) : 'n/a'}</div>
       <textarea id="answerBox">${escapeHtml(data.draft_answer)}</textarea>
       <div class="actions">
@@ -322,6 +362,17 @@
       </div>
     `;
     detail.appendChild(panel);
+
+    // Il materiale di riferimento sta SOTTO l'editor: l'azione che
+    // l'operatore deve compiere resta immediatamente visibile, mentre il
+    // contesto — che può essere lungo, fino a sei elementi fra policy e
+    // ticket — si consulta scorrendo quando serve verificare la bozza.
+    detail.appendChild(renderContext(
+      data.kb_docs_context, 'Retrieved policy passages',
+      'No policy passage was retrieved for this request.'));
+    detail.appendChild(renderContext(
+      data.kb_tickets_context, 'Similar past tickets',
+      'No similar past ticket was retrieved for this request.'));
 
     const textarea = panel.querySelector('#answerBox');
     panel.querySelector('#resetBtn').addEventListener('click', () => { textarea.value = data.draft_answer; });

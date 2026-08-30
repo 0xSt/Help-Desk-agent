@@ -58,6 +58,24 @@ from app.schemas import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+class _EscludiHealthcheck(logging.Filter):
+    """
+    Toglie dal log degli accessi le richieste dell'healthcheck.
+
+    Senza, il controllo ogni pochi secondi produce una riga costante che
+    seppellisce il traffico reale: durante una dimostrazione le righe
+    interessanti — l'escalation di un ticket, la ripresa del grafo — scorrono
+    via in mezzo al rumore. L'healthcheck resta pienamente funzionante: viene
+    silenziato il suo log, non il controllo.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/healthz" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(_EscludiHealthcheck())
+
 app = FastAPI(title="Help Desk — Demo HITL")
 
 
@@ -87,6 +105,20 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 def serve_user_ui():
     """Interfaccia utente: apertura ticket / chat di supporto."""
     return FileResponse("app/static/index.html")
+
+
+@app.get("/healthz")
+def healthz():
+    """
+    Sonda di liveness per l'healthcheck del container.
+
+    Endpoint dedicato e non un endpoint di business: prima l'healthcheck
+    interrogava `/api/tickets`, che acquisisce il lock del TicketStore a ogni
+    controllo. Verificare che il processo risponda non deve richiedere di
+    toccare lo stato applicativo, e con un solo endpoint è anche possibile
+    escluderlo dal log degli accessi senza silenziare anche il traffico reale.
+    """
+    return {"status": "ok"}
 
 
 @app.get("/agent")
@@ -151,6 +183,9 @@ def chat(req: ChatRequest):
             confidence=payload.get("confidence"),
             history=result.get("history", []),
             escalation_triggers=payload.get("triggers"),
+            current_message=payload.get("user_query"),
+            kb_docs_context=payload.get("kb_docs"),
+            kb_tickets_context=payload.get("kb_tickets"),
         )
 
     return ChatResponse(
@@ -220,6 +255,9 @@ def get_state(thread_id: str):
             confidence=payload.get("confidence"),
             history=history,
             escalation_triggers=payload.get("triggers"),
+            current_message=payload.get("user_query"),
+            kb_docs_context=payload.get("kb_docs"),
+            kb_tickets_context=payload.get("kb_tickets"),
         )
 
     return ChatResponse(
