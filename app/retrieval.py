@@ -255,24 +255,57 @@ def _ticket_embed_text(ticket: Dict[str, Any]) -> str:
 
 
 def _ticket_payload(ticket: Dict[str, Any]) -> Dict[str, Any]:
-    resolution_text = (
-        f"Similar past ticket — {ticket['subject']}\n"
-        f"Category: {ticket['category']} / {ticket['subcategory']} · Priority: {ticket['priority']}\n"
-        f"Resolution: {ticket['resolution_summary']}\n"
-        f"Steps taken: {'; '.join(ticket['resolution_steps'])}\n"
-        f"Escalated to a human agent: {'yes' if ticket['was_escalated_to_human'] else 'no'}"
-        + (f" (reason: {ticket['escalation_reason']})" if ticket.get("escalation_reason") else "")
-    )
-    return {
-        "text": resolution_text,
-        "source": ticket["ticket_id"],
-        "category": ticket["category"],
-        "subcategory": ticket["subcategory"],
-        "priority": ticket["priority"],
-        "was_escalated_to_human": ticket["was_escalated_to_human"],
-        "escalation_reason": ticket.get("escalation_reason"),
-        "tags": ticket.get("tags", []),
-    }
+    """
+    Payload di un ticket: **tutti i campi originali**, senza rielaborazioni.
+
+    In precedenza il payload conteneva un campo `text` che concatenava
+    oggetto, categoria, priorità, risoluzione e passi seguiti in un unico
+    blocco, insieme a una manciata di campi selezionati. Aveva due difetti:
+    la `description`, cioè il messaggio effettivo dell'utente, non compariva
+    da nessuna parte, e chi leggeva una traccia MLflow vedeva un testo
+    ricomposto invece del ticket com'è realmente nei dati.
+
+    Ora si conserva il record integrale. Il testo destinato al prompt viene
+    composto al momento dell'uso da `ticket_as_context()`, così la
+    rappresentazione per il modello resta modificabile senza dover
+    reindicizzare, e la traccia mostra il dato e non una sua elaborazione.
+
+    Si aggiunge `source` come alias di `ticket_id`: è la chiave con cui le
+    query filtrano in leave-one-out e con cui l'interfaccia identifica la
+    fonte, uniforme fra le due collection.
+    """
+    return {**ticket, "source": ticket["ticket_id"]}
+
+
+def ticket_as_context(payload: Dict[str, Any]) -> str:
+    """
+    Compone la rappresentazione testuale di un ticket per il prompt del modello.
+
+    Vive qui e non nei singoli consumatori perché la usano in tre punti
+    diversi — la costruzione del prompt, il giudice dell'evaluation e la suite
+    RAGAS — e formulazioni divergenti renderebbero incomparabili le misure
+    con ciò che il modello ha effettivamente letto.
+
+    Include la `description` originale: è il modo in cui l'utente aveva
+    descritto il problema, ed è l'elemento che rende il precedente
+    riconoscibile rispetto alla richiesta in arrivo.
+    """
+    righe = [
+        f"Similar past ticket {payload.get('ticket_id', payload.get('source', '?'))}"
+        f" — {payload.get('subject', '')}",
+        f"Reported problem: {payload.get('description', '')}",
+        f"Category: {payload.get('category', '?')} / {payload.get('subcategory', '?')}"
+        f" · Priority: {payload.get('priority', '?')}",
+        f"Resolution: {payload.get('resolution_summary', '')}",
+    ]
+    passi = payload.get("resolution_steps") or []
+    if passi:
+        righe.append("Steps taken: " + "; ".join(passi))
+    esito = "yes" if payload.get("was_escalated_to_human") else "no"
+    motivo = payload.get("escalation_reason")
+    righe.append(f"Escalated to a human agent: {esito}"
+                 + (f" (reason: {motivo})" if motivo else ""))
+    return "\n".join(righe)
 
 
 def _kb_tickets_items() -> List[Dict[str, Any]]:
@@ -297,6 +330,13 @@ def _kb_tickets_items() -> List[Dict[str, Any]]:
 # ri-embeddare per scoprirlo.
 HASH_FIELD = "_content_hash"
 
+# Versione dello schema del payload. Entra nell'hash del contenuto perché la
+# sincronizzazione è incrementale e confronta gli hash: cambiando la struttura
+# del payload senza toccare il testo embeddato, i punti già indicizzati
+# risulterebbero invariati e conserverebbero il payload vecchio. Incrementarla
+# è il modo per far rigenerare l'indice senza doverlo cancellare a mano.
+PAYLOAD_SCHEMA_VERSION = 2
+
 
 def _content_hash(text: str) -> str:
     """
@@ -306,7 +346,8 @@ def _content_hash(text: str) -> str:
     lo stesso testo produce un vettore diverso, quindi il punto va rigenerato
     anche se il contenuto non è cambiato di una virgola.
     """
-    material = f"{config.embedding_provider()}|{config.GEMINI_EMBEDDING_MODEL}|{config.active_embedding_dim()}|{text}"
+    material = (f"{PAYLOAD_SCHEMA_VERSION}|{config.embedding_provider()}|"
+                f"{config.GEMINI_EMBEDDING_MODEL}|{config.active_embedding_dim()}|{text}")
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
 
 

@@ -279,6 +279,22 @@
   // similarità accompagna ogni elemento perché indica quanto il sistema lo
   // considerasse pertinente, informazione utile a capire se la bozza poggia
   // su basi solide o su appigli deboli.
+  // I ticket sono ora conservati integri: il corpo si compone dai campi
+  // invece di leggere un testo già impaginato. Vengono mostrati il problema
+  // riportato dall'utente e come fu risolto, che sono gli elementi su cui
+  // l'operatore giudica se il precedente sia davvero pertinente.
+  function ticketBody(t) {
+    const righe = [];
+    if (t.description) righe.push('Problem: ' + t.description);
+    if (t.resolution_summary) righe.push('Resolution: ' + t.resolution_summary);
+    if (t.resolution_steps && t.resolution_steps.length) {
+      righe.push('Steps: ' + t.resolution_steps.join('; '));
+    }
+    righe.push('Escalated: ' + (t.was_escalated_to_human ? 'yes' : 'no')
+               + (t.escalation_reason ? ' — ' + t.escalation_reason : ''));
+    return righe.join('\n\n');
+  }
+
   function renderContext(items, titolo, vuoto) {
     const blocco = document.createElement('div');
     blocco.className = 'context-block';
@@ -298,15 +314,19 @@
       const card = document.createElement('div');
       card.className = 'context-item';
       const score = it.score != null ? it.score.toFixed(3) : 'n/a';
+      // Le policy portano un campo `text` già impaginato; i ticket sono
+      // conservati integri e il corpo si compone dai loro campi.
+      const titoloVoce = it.subject ? `${it.source} — ${it.subject}` : (it.source || '—');
       card.innerHTML = `
         <div class="head">
-          <span class="src">${escapeHtml(it.source || '—')}</span>
+          <span class="src"></span>
           <span class="score">similarity ${score}</span>
         </div>
         <div class="body"></div>`;
-      // textContent e non innerHTML: il testo arriva dalla knowledge base e
-      // non deve poter iniettare markup nella console.
-      card.querySelector('.body').textContent = it.text || '';
+      // textContent e non innerHTML: il contenuto arriva dalla knowledge base
+      // e non deve poter iniettare markup nella console.
+      card.querySelector('.src').textContent = titoloVoce;
+      card.querySelector('.body').textContent = it.text != null ? it.text : ticketBody(it);
       blocco.appendChild(card);
     });
     return blocco;

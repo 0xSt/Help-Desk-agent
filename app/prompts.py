@@ -105,6 +105,41 @@ def register_agent_prompt() -> Optional[Any]:
     )
 
 
+def load_agent_prompt() -> str:
+    """
+    Restituisce il prompt di sistema **caricato dal registry MLflow**.
+
+    È la fonte che l'applicazione usa a runtime: il testo che finisce nella
+    chiamata al modello è quello della versione puntata dall'alias
+    `production`, non la costante nel codice. Il vantaggio pratico è che il
+    prompt effettivamente impiegato è sempre ispezionabile e versionato nello
+    stesso posto in cui si leggono metriche e tracce, e una traccia può essere
+    ricondotta al testo esatto che l'ha prodotta.
+
+    In caso di registry irraggiungibile ricade sulla costante definita in
+    `app/llm.py`. Il ripiego è deliberato: il prompt è un ingrediente
+    indispensabile per rispondere, e far dipendere la capacità di rispondere
+    ai ticket dalla disponibilità del servizio di tracciamento sarebbe uno
+    scambio pessimo, coerentemente con quanto già fatto per il tracing.
+
+    La versione caricata è tenuta in cache di processo: il registry viene
+    interrogato una volta sola, non a ogni ticket.
+    """
+    from app.llm import SYSTEM_PROMPT
+
+    versione = _cache.get(AGENT_PROMPT_NAME)
+    if versione is None:
+        # Non ancora risolto in questo processo: `register_agent_prompt`
+        # popola la cache sia registrando una versione nuova sia riusando
+        # quella esistente, quindi copre entrambi i casi.
+        versione = register_agent_prompt()
+
+    if versione is None:
+        logger.warning("Prompt non caricabile dal registry: uso la costante locale.")
+        return SYSTEM_PROMPT
+    return versione.template
+
+
 def as_params(prefix: str = "prompt") -> Dict[str, Any]:
     """
     Versione dei prompt attivi, in forma loggabile come parametri di un run.

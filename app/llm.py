@@ -194,6 +194,25 @@ def _keyword_signals(query: str) -> TicketSignals:
     )
 
 
+def get_system_prompt() -> str:
+    """
+    Prompt di sistema effettivamente usato per generare una risposta.
+
+    Delega a `app.prompts`, che lo carica dal registry MLflow e ricade sulla
+    costante `SYSTEM_PROMPT` di questo modulo se il registry non risponde.
+    L'import è fatto qui dentro e non in testa al file per evitare un ciclo:
+    `app.prompts` legge `SYSTEM_PROMPT` da qui per registrarlo la prima volta.
+    """
+    try:
+        from app import prompts
+
+        return prompts.load_agent_prompt()
+    except Exception:
+        logger.warning("Caricamento del prompt fallito: uso la costante locale.",
+                       exc_info=True)
+        return SYSTEM_PROMPT
+
+
 def _mock_answer(query: str) -> DraftAnswer:
     logger.warning("GEMINI_API_KEY non impostata: uso la modalità mock.")
     signals = _keyword_signals(query)
@@ -218,7 +237,11 @@ def _format_kb_context(
         docs = "\n".join(f"- {c['text']} (source: {c.get('source', '?')})" for c in kb_docs_context)
         sections.append(f"Relevant policy documentation:\n{docs}")
     if kb_tickets_context:
-        tickets = "\n".join(f"- {c['text']} (source: {c.get('source', '?')})" for c in kb_tickets_context)
+        # I ticket sono conservati integri nel payload: il testo per il
+        # prompt si compone qui, tramite l'unico formattatore condiviso.
+        from app.retrieval import ticket_as_context
+
+        tickets = "\n".join(f"- {ticket_as_context(c)}" for c in kb_tickets_context)
         sections.append(f"Similar past tickets and how they were resolved:\n{tickets}")
     return "\n\n".join(sections)
 
@@ -276,7 +299,7 @@ def generate_draft_answer(
             model=config.GEMINI_MODEL,
             contents=_build_contents(query, history, kb_context),
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=get_system_prompt(),
                 response_mime_type="application/json",
                 response_schema=DraftAnswer,
                 # Nessun `temperature`/`top_p`/`top_k`: i parametri di
