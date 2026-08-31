@@ -48,7 +48,8 @@ _cache: Dict[str, Optional[Any]] = {}
 
 
 def ensure_registered(name: str, template: str,
-                      commit_message: str = "aggiornamento automatico") -> Optional[Any]:
+                      commit_message: str = "aggiornamento automatico",
+                      bootstrap_only: bool = False) -> Optional[Any]:
     """
     Garantisce che `template` sia registrato come versione corrente di `name`.
 
@@ -60,6 +61,19 @@ def ensure_registered(name: str, template: str,
     Il confronto con la versione esistente è ciò che rende l'operazione
     idempotente: registrare a ogni avvio un testo immutato creerebbe versioni
     duplicate che rendono inutile la cronologia.
+
+    `bootstrap_only` stabilisce **chi vince** quando i due testi divergono:
+
+    - `False` — vince il codice: se il testo locale differisce da quello
+      registrato ne viene creata una versione nuova. Adatto ai prompt che sono
+      parte dello strumento di misura, come quello del giudice, dove la
+      versione registrata deve corrispondere al codice che ha davvero prodotto
+      i punteggi.
+    - `True` — vince il registry: la costante locale serve solo a inizializzare
+      il prompt la prima volta, e da lì in poi il testo registrato non viene
+      più toccato. È il comportamento del prompt dell'agente, che si vuole
+      poter correggere dall'interfaccia MLflow senza rimettere mano al codice
+      né riavviare il servizio.
     """
     if name in _cache:
         return _cache[name]
@@ -80,6 +94,20 @@ def ensure_registered(name: str, template: str,
             _cache[name] = corrente
             return corrente
 
+        if corrente is not None and bootstrap_only:
+            # Il prompt esiste già e la sorgente di verità è il registry: la
+            # costante nel codice viene ignorata, comprese eventuali modifiche
+            # locali. Le si segnala, perché altrimenti chi ha appena
+            # modificato il codice non capirebbe perché non cambia nulla.
+            logger.info(
+                "Prompt '%s': uso la versione %s dal registry. La costante nel "
+                "codice differisce ma NON viene applicata: la sorgente di "
+                "verità è il registry, modificalo da lì.",
+                name, corrente.version,
+            )
+            _cache[name] = corrente
+            return corrente
+
         nuova = genai.register_prompt(name=name, template=template,
                                       commit_message=commit_message)
         genai.set_prompt_alias(name, ALIAS, nuova.version)
@@ -95,13 +123,24 @@ def ensure_registered(name: str, template: str,
 
 
 def register_agent_prompt() -> Optional[Any]:
-    """Registra il prompt di sistema dell'agente, leggendolo da `app/llm.py`."""
+    """
+    Risolve il prompt dell'agente, inizializzandolo se il registry è vuoto.
+
+    Al primo avvio registra la costante definita in `app/llm.py`; dalle volte
+    successive restituisce la versione puntata dall'alias `production` senza
+    sovrascriverla, anche se nel frattempo la costante è cambiata.
+    """
     from app.llm import SYSTEM_PROMPT
 
     return ensure_registered(
         AGENT_PROMPT_NAME,
         SYSTEM_PROMPT,
         commit_message="Prompt dell'agente di help desk",
+        # Il registry è la sorgente di verità per il prompt dell'agente: la
+        # costante serve solo a inizializzarlo al primo avvio su un registry
+        # vuoto. Modificarlo dall'interfaccia MLflow ha effetto sul servizio
+        # senza toccare il codice.
+        bootstrap_only=True,
     )
 
 
