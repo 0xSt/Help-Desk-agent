@@ -9,7 +9,7 @@
 #                                 solo dopo che è uscito con successo
 #
 # Avvio:
-#   cp .env.example .env      # e valorizza GEMINI_API_KEY
+#   cp .env .env      # e valorizza GEMINI_API_KEY
 #   docker compose up --build
 #
 # Poi: interfaccia utente su http://localhost:8080/, console operatore su

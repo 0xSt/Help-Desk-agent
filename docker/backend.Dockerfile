@@ -45,6 +45,7 @@ COPY --chown=appuser:appuser app/ ./app/
 # container con `docker compose run`, evitando di dover replicare l'ambiente
 # Python sull'host. Sono solo file di testo e JSON: peso trascurabile.
 COPY --chown=appuser:appuser evaluation/ ./evaluation/
+COPY --chown=appuser:appuser eval_suite/ ./eval_suite/
 
 USER appuser
 
