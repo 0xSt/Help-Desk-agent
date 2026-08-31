@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app import config
+from app.retrieval import ticket_as_context
 from evaluation.run_evaluation import run_system, stratified_sample
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -320,8 +321,11 @@ def predici(query: str, ticket_id: str) -> Dict[str, Any]:
     esito = run_system(query, exclude_sources=[ticket_id])
     return {
         "answer": esito["answer"],
+        # I ticket sono conservati integri nel payload: il testo valutato
+        # deve essere lo stesso che il modello ha letto, quindi si usa il
+        # medesimo formattatore impiegato per costruire il prompt.
         "contexts": [d.get("text", "") for d in esito["kb_docs"]]
-                    + [t.get("text", "") for t in esito["kb_tickets"]],
+                    + [ticket_as_context(t) for t in esito["kb_tickets"]],
         "escalated": esito["escalated"],
     }
 
