@@ -75,8 +75,7 @@ Sia la generazione sia l'embedding passano da Gemini (SDK `google-genai`).
   `RETRIEVAL_DOCUMENT` in indicizzazione, `RETRIEVAL_QUERY` in query.
 
 **Senza `GEMINI_API_KEY`** il sistema resta interamente eseguibile: risposte
-mock ed embedding hash-based deterministico. Serve a sviluppare e testare
-senza credenziali né costi, ma la qualità del retrieval non è rappresentativa.
+mock ed embedding hash-based deterministico. 
 
 
 ## Tracing con MLflow
@@ -93,10 +92,7 @@ variabile non è impostata, MLflow scrive in locale su `./mlruns`. Il tracing
 **non può far cadere una richiesta**: se il server è irraggiungibile, il
 sistema continua a rispondere senza tracciare.
 
-> Limite noto: quando il grafo si sospende su `interrupt()`, il tracer di
-> MLflow emette un warning (`MlflowLangchainTracer has no attribute
-> 'on_interrupt'`). È innocuo — la trace viene registrata comunque — ma
-> segnala che l'integrazione non copre ancora nativamente gli interrupt di
+> L'integrazione di MLFlow non copre ancora nativamente gli interrupt di
 > LangGraph.
 
 ## Retrieval: `app/retrieval.py`
@@ -116,8 +112,7 @@ Le due knowledge base vivono in `app/knowledge_base/`:
 ## I dataset
 
 Tutto il materiale è **simulato**: policy, ticket e casi di prova sono stati
-costruiti per il progetto e non rappresentano un'organizzazione reale. Sono
-divisi in due gruppi, con ruoli che non vanno confusi.
+costruiti per il progetto e non rappresentano un'organizzazione reale.
 
 ### Knowledge base — `app/knowledge_base/`
 
@@ -133,9 +128,7 @@ da cui deriva. POL-006 è la policy principale e prevale in caso di conflitto.
 
 I ticket coprono 7 categorie e 20 sottocategorie, con distribuzione
 volutamente sbilanciata come in un help desk reale (da 33 casi di gestione
-accessi a 7 di collaborazione cloud). **33 su 135 furono escalati a un
-operatore**, cioè il 24%: è la proporzione che rende fuorviante l'accuratezza
-come metrica della decisione.
+accessi a 7 di collaborazione cloud).
 
 #### Modello dati di un ticket
 
@@ -160,11 +153,6 @@ come metrica della decisione.
 | `csat_score` | `int \| null` | gradimento 1–5, assente sui ticket più critici |
 | `tags` | `list[str]` | parole chiave |
 
-I ticket sono conservati **integri** nel payload Qdrant, con l'aggiunta del
-solo campo `source`: una traccia mostra quindi il record come è nei dati, non
-una sua rielaborazione. Il testo per il prompt viene composto al momento
-dell'uso da `ticket_as_context()`.
-
 #### Modello dati di una policy
 
 Documenti Markdown con intestazione (`Version`, `Effective Date`, `Owner`,
@@ -180,8 +168,7 @@ una volta recuperato il punto.
 
 ### Dati di valutazione — `eval_suite/data/`
 
-Non vengono mai indicizzati: servono a **misurare** il sistema, non ad
-alimentarlo.
+Non vengono mai indicizzati: servono a **misurare** metriche.
 
 | File | Contenuto | Usato da |
 |---|---|---|
@@ -213,29 +200,12 @@ oggetto con la chiave `queries` (`list[str]`) e note descrittive;
 `acceptable` sono pertinenti ma non indispensabili e non vengono conteggiate
 come errore.
 
-I 43 casi esistono perché lo storico **non basta**: nessun ticket passato è
-stato escalato per bassa confidenza o per assenza di appigli documentali,
-essendo stati gestiti tutti da operatori umani. Coprono tutte e nove le
-clausole implementate, e i 20 negativi sono indispensabili quanto i positivi —
-senza, un sistema che escala tutto otterrebbe richiamo perfetto. Diversi
-negativi sono deliberatamente vicini a un positivo e se ne distinguono per un
-solo elemento (software a catalogo contro fuori catalogo, uscita volontaria
-contro licenziamento), così da verificare che il sistema distingua la sostanza
-e non il lessico.
-
-Le 70 query fuori dominio non hanno etichette, ed è voluto: la soglia di
-grounding si tara confrontando la distribuzione dei loro punteggi di
-similarità con quella delle richieste coperte dalla knowledge base, senza
-toccare i casi etichettati. Tararla su quelli significherebbe adattare un
-parametro al banco di prova e rendere priva di significato la misura
-successiva.
-
 ## Pipeline di evaluation: `eval_suite/`
 
 Due suite separate, perché misurano cose che si guastano in modo indipendente:
 una media unica nasconderebbe quale delle due non funziona.
 
-### Parametri tracciati (valori di default)
+### Parametri tracciati del sistema ad ogni run (valori di default)
 | Parametro | Valore |
 |---|---|
 | prompt/agent_version |    1 |
@@ -260,21 +230,17 @@ Classe positiva: «va escalato». La metrica primaria è il **richiamo**, non
 l'accuratezza: con circa un quarto di positivi, un sistema che non escala mai
 raggiungerebbe il 76% pur essendo inutile. La gerarchia riflette l'asimmetria
 dei costi — un falso negativo è un incidente di sicurezza mai rivisto, un falso
-positivo qualche minuto di un operatore.
+positivo qualche minuto di lavoro di un operatore.
 
 | Metrica | Ruolo |
 |---|---|
 | `recall` | primaria: quota di ticket da escalare effettivamente colti |
 | `precision` | costo operativo: quante escalation erano superflue |
 | `f2` | sintesi, pesa il richiamo quattro volte la precisione |
-| `mcc` | controprova robusta allo sbilanciamento delle classi |
-| `clausola/<POL>/recall` | richiamo per singola clausola: individua *quale* regola non scatta |
-| `famiglia/<tipo>/recall` | separa i segnali che dipendono dal prompt da quelli che dipendono dalle soglie |
 
 **`quality`** — il contesto recuperato è pertinente e la risposta vi si attiene?
 Valutata sui ticket storici in leave-one-out, con tre **scorer nativi di
-MLflow**, che sono giudizi di un modello perché nessuna di queste proprietà si
-calcola con una formula chiusa.
+MLflow**.
 
 | Scorer | Cosa misura |
 |---|---|
@@ -284,21 +250,13 @@ calcola con una formula chiusa.
 
 I primi due si leggono insieme: fondatezza bassa con pertinenza alta indica che
 il modello inventa pur avendo il materiale giusto; entrambe basse indicano che
-il problema è a monte, nel recupero.
-
-**Due vincoli tecnici.** Gli scorer di recupero leggono la traccia, non gli
-argomenti della funzione: cercano uno span di tipo `RETRIEVER`. Il grafo non ne
-produce, quindi `eval_suite/pipeline.py` ne registra uno dentro la sola traccia
-di valutazione, lasciando intatto il codice di produzione. Il modello giudice va
-inoltre indicato esplicitamente come `gemini:/<modello>`, che MLflow instrada
-tramite LiteLLM: in assenza di indicazioni userebbe un modello OpenAI.
+il problema è a monte, nel retrieval.
 
 ### Esecuzione nei container
 
 La suite gira dentro l'immagine del backend, che la contiene già e che ha
 `MLFLOW_TRACKING_URI=http://mlflow:5000`: i risultati finiscono quindi
-nell'istanza MLflow del compose e nei suoi volumi, non in uno store locale
-effimero.
+nell'istanza MLflow del compose e nei suoi volumi.
 
 ```bash
 # 1. servizi necessari: Qdrant per il retrieval, MLflow per i risultati
@@ -313,109 +271,8 @@ docker compose run --rm backend python -m eval_suite.run --suite all --sample 20
 #    http://localhost:5000 -> esperimento "helpdesk-agent-eval"
 ```
 
-Tre dettagli che rendono corretta questa procedura:
-
-- **`--rm`** elimina il container al termine. Il contenitore è usa-e-getta:
-  ciò che deve sopravvivere sono i risultati, che stanno nei volumi di MLflow.
-- **niente `--no-deps`**: la valutazione esegue il sistema vero, quindi ha
-  bisogno di Qdrant popolato e di MLflow raggiungibile. Il servizio
-  `ingestion` va lasciato completare prima, altrimenti le collection sono
-  vuote e ogni ticket verrebbe escalato per mancanza di appigli.
-- **la chiave API** arriva dal file `.env` tramite `env_file`, come per gli
-  altri servizi: la suite `quality` ne ha bisogno perché le sue tre metriche
-  sono giudizi di un modello.
-
 I risultati persistono nei volumi `mlflow_db` (esperimenti, run, metriche,
-tracce) e `mlflow_artifacts`. Sopravvivono a `docker compose down`; si perdono
-solo con `docker compose down -v`, che cancella i volumi.
-
-Per eseguirla dall'host anziché nei container servono tre variabili nel `.env`,
-che puntano ai servizi esposti sulle porte locali:
-
-```
-QDRANT_URL=http://localhost:6333
-MLFLOW_TRACKING_URI=http://localhost:5000
-AUTO_INDEX=false
-```
-
-Non disturbano i container: nel compose questi valori sono impostati in
-`environment:`, che ha la precedenza su `env_file:`.
-
-### Avanzamento
-
-Ogni caso concluso emette una riga di log con barra, contatore e tempo
-impiegato:
-
-```
-INFO eval_suite.pipeline: [██████··················]  11/43  25.6% ·  2.4s · escalato    · My laptop was stolen from my car...
-```
-
-La barra che MLflow disegna da sé viene riscritta sulla stessa riga con
-caratteri di controllo: nei log di Docker, che non sono un terminale, risulta
-illeggibile. Questa è una riga per caso, quindi leggibile con
-`docker compose logs -f`.
-
-Serve soprattutto a distinguere due situazioni che dall'esterno appaiono
-identiche: un sistema **lento**, perché sta attendendo fra un tentativo e
-l'altro dopo un errore di quota, e un sistema **bloccato**. Se le righe
-continuano ad apparire, per quanto distanziate, sta procedendo. Il tempo per
-caso lo conferma: valori che crescono da qualche decimo a diversi secondi
-indicano che i ritentativi sono entrati in gioco.
-
-### Quote del provider
-
-Le quote di embedding e generazione sono **al minuto**, e la valutazione le
-satura facilmente: MLflow esegue i casi in parallelo e ognuno comporta due
-chiamate di embedding, una generazione e tre giudizi. Il sintomo è un errore
-`429 RESOURCE_EXHAUSTED`.
-
-Due difese, entrambe attive per impostazione predefinita:
-
-- **la concorrenza è limitata a 2 casi paralleli** (`--workers`), contro i 10
-  del comportamento predefinito di MLflow. La valutazione non è un percorso
-  interattivo: qualche minuto in più non ha costo, mentre una misurazione
-  falsata da errori di quota va rifatta da capo;
-- **le chiamate di embedding vengono ritentate** fino a 5 volte
-  (`EMBEDDING_MAX_RETRIES`) con attesa che raddoppia — 1, 2, 4 secondi. Solo
-  sugli errori transitori: una chiave non valida o un modello inesistente
-  falliscono subito, perché ritentarli ritarderebbe l'errore senza risolverlo.
-
-Se il 429 si ripresenta, le leve nell'ordine: abbassare `--workers` a 1,
-ridurre `--sample`, alzare `EMBEDDING_MAX_RETRIES` nel `.env`.
-
-**Prima però conviene sapere quale servizio si sta usando.** L'API Gemini
-diretta e Vertex AI sono prodotti distinti con quote separate, e le quote di
-embedding predefinite su Vertex sono più strette. La scelta non è esplicita nel
-codice: la fa l'SDK in base all'ambiente, e basta `GOOGLE_GENAI_USE_VERTEXAI`
-oppure `GOOGLE_CLOUD_PROJECT` con le credenziali applicative perché il client
-passi a Vertex senza che nulla lo segnali. All'avvio del backend e della
-valutazione viene quindi riportato:
-
-```
-INFO app.main: Backend Google — API Gemini diretta (https://generativelanguage.googleapis.com/)
-```
-
-Il dominio nel messaggio d'errore conferma la stessa cosa:
-`generativelanguage.googleapis.com` è l'API diretta,
-`aiplatform.googleapis.com` è Vertex.
-
-Perché conta: senza ritentativi il recupero fallisce, `search_kb_docs`
-restituisce una lista vuota per non interrompere il servizio, e la valutazione
-prosegue calcolando metriche **su un contesto inesistente**. Il risultato non
-sarebbe un errore visibile ma un numero privo di significato, che è l'esito
-peggiore per uno strumento di misura.
-
-**Riproducibilità.** Ogni esecuzione registra come parametri del run la
-configurazione attiva, la versione e l'URI del prompt dell'agente nel registry,
-il modello giudice e la composizione del dataset. Senza i parametri che le hanno
-prodotte, due serie di metriche non sono confrontabili e una differenza non è
-attribuibile al prompt piuttosto che alle soglie.
-
-```
-prompt/agent_version  1        eval/judge_model  gemini:/gemini-3.1-flash-lite
-prompt/agent_uri      prompts:/helpdesk-agent-system/1
-eval/dataset          escalation_cases          eval/n_cases  43
-```
+tracce) e `mlflow_artifacts`.
 
 ## Riferimento API
 
@@ -442,10 +299,3 @@ eval/dataset          escalation_cases          eval/n_cases  43
 - l'alias `production` punta sempre alla versione attiva;
 - la versione finisce fra i parametri di ogni run, di avvio e di valutazione.
 
-### Scelte di progetto
-
-**Leave-one-out ovunque si usino i ticket come query.** Non solo perché una
-query recupererebbe sé stessa, ma per una ragione più seria: il payload dei
-ticket contiene `Escalated to a human agent: yes`, quindi senza esclusione il
-modello leggerebbe nel contesto la risposta esatta alla domanda che gli stiamo
-ponendo. Misureremmo la capacità di copiare, non di decidere.
