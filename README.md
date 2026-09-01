@@ -113,6 +113,123 @@ Le due knowledge base vivono in `app/knowledge_base/`:
   somiglierà), mentre risoluzione/categoria/priorità/esito di escalation
   finiscono nel payload da mostrare come contesto una volta recuperato il punto.
 
+## I dataset
+
+Tutto il materiale è **simulato**: policy, ticket e casi di prova sono stati
+costruiti per il progetto e non rappresentano un'organizzazione reale. Sono
+divisi in due gruppi, con ruoli che non vanno confusi.
+
+### Knowledge base — `app/knowledge_base/`
+
+È ciò che il sistema **indicizza e interroga** per rispondere.
+
+| File | Contenuto | Indicizzazione |
+|---|---|---|
+| `policies/POL-001..008-*.md` | 8 policy IT che definiscono procedure, soglie di approvazione e criteri di escalation | 60 chunk in `kb_docs`, uno per sezione `##` |
+| `past_tickets.json` | 135 ticket risolti, 18 campi ciascuno | 135 punti in `kb_tickets`, uno per ticket |
+
+Le policy sono la fonte normativa: ogni trigger di escalation cita la clausola
+da cui deriva. POL-006 è la policy principale e prevale in caso di conflitto.
+
+I ticket coprono 7 categorie e 20 sottocategorie, con distribuzione
+volutamente sbilanciata come in un help desk reale (da 33 casi di gestione
+accessi a 7 di collaborazione cloud). **33 su 135 furono escalati a un
+operatore**, cioè il 24%: è la proporzione che rende fuorviante l'accuratezza
+come metrica della decisione.
+
+#### Modello dati di un ticket
+
+| Campo | Tipo | Ruolo |
+|---|---|---|
+| `ticket_id` | `str` | identificativo, es. `TCK-2026-00323`; diventa `source` nel payload Qdrant |
+| `created_at` | `str` (ISO) | data di apertura |
+| `source_channel` | `str` | canale: Chat, Email, Phone, Self-Service Portal |
+| `department` | `str` | reparto del richiedente |
+| `requester_role` | `str` | Standard Employee, Manager, Director |
+| `category` | `str` | una delle 7 categorie |
+| `subcategory` | `str` | una delle 20 sottocategorie |
+| `priority` | `str` | da `P1` a `P4` |
+| `subject` | `str` | oggetto della richiesta — **embeddato** |
+| `description` | `str` | problema come descritto dall'utente — **embeddato** |
+| `resolution_steps` | `list[str]` | passi seguiti dall'operatore |
+| `resolution_summary` | `str` | sintesi della risoluzione |
+| `resolution_time_minutes` | `int` | tempo impiegato |
+| `status` | `str` | Resolved, Escalated_Resolved, Escalated_Pending |
+| `was_escalated_to_human` | `bool` | **etichetta di riferimento** per la valutazione |
+| `escalation_reason` | `str \| null` | motivazione, valorizzata solo se escalato |
+| `csat_score` | `int \| null` | gradimento 1–5, assente sui ticket più critici |
+| `tags` | `list[str]` | parole chiave |
+
+I ticket sono conservati **integri** nel payload Qdrant, con l'aggiunta del
+solo campo `source`: una traccia mostra quindi il record come è nei dati, non
+una sua rielaborazione. Il testo per il prompt viene composto al momento
+dell'uso da `ticket_as_context()`.
+
+#### Modello dati di una policy
+
+Documenti Markdown con intestazione (`Version`, `Effective Date`, `Owner`,
+`Applies To`) e sezioni numerate `## `. Ogni sezione diventa un chunk con
+payload `{policy_id, policy_title, section_title, text, source}`, dove `text`
+porta in testa il titolo del documento: un chunk recuperato isolatamente resta
+così comprensibile.
+
+Di ogni ticket viene embeddato il solo **lato problema** — oggetto e
+descrizione, ciò a cui una nuova richiesta somiglia — mentre risoluzione,
+categoria ed esito restano nel payload, come contesto da mostrare al modello
+una volta recuperato il punto.
+
+### Dati di valutazione — `eval_suite/data/`
+
+Non vengono mai indicizzati: servono a **misurare** il sistema, non ad
+alimentarlo.
+
+| File | Contenuto | Usato da |
+|---|---|---|
+| `escalation_cases.json` | 43 casi scritti a mano con esito atteso e clausole attese: 23 da escalare, 20 da risolvere | suite `escalation` |
+| `out_of_domain_queries.json` | 70 richieste plausibili ma su argomenti che nessuna policy copre | calibrazione della soglia di grounding |
+| `policy_relevance.json` | mappa delle 20 sottocategorie verso le policy attese e quelle accettabili | misure di pertinenza del recupero |
+
+#### Modello dati di un caso di valutazione
+
+| Campo | Tipo | Ruolo |
+|---|---|---|
+| `case_id` | `str` | identificativo, es. `ESC-015` |
+| `query` | `str` | la richiesta sottoposta al sistema |
+| `expected_escalate` | `bool` | esito atteso: è la verità di riferimento |
+| `expected_trigger_codes` | `list[str]` | clausole che dovrebbero scattare, es. `["POL-006 §3.1"]` |
+| `trigger_family` | `str` | `mandatory`, `confidence`, `retrieval` o `none` |
+| `threshold_sensitive` | `bool` | se l'esito dipende dalle soglie configurate |
+| `rationale` | `str` | perché quell'esito è corretto — documentazione, non usata dal codice |
+
+`expected_trigger_codes` è ciò che permette di misurare non solo *se* la
+decisione è corretta ma *per quale motivo*, distinguendo una decisione giusta
+presa per la ragione sbagliata. `trigger_family` separa i segnali che
+dipendono dal prompt da quelli che dipendono dalle soglie.
+
+Gli altri due file hanno struttura minima: `out_of_domain_queries.json` è un
+oggetto con la chiave `queries` (`list[str]`) e note descrittive;
+`policy_relevance.json` mappa ogni sottocategoria a
+`{"expected": list[str], "acceptable": list[str]}`, dove le policy
+`acceptable` sono pertinenti ma non indispensabili e non vengono conteggiate
+come errore.
+
+I 43 casi esistono perché lo storico **non basta**: nessun ticket passato è
+stato escalato per bassa confidenza o per assenza di appigli documentali,
+essendo stati gestiti tutti da operatori umani. Coprono tutte e nove le
+clausole implementate, e i 20 negativi sono indispensabili quanto i positivi —
+senza, un sistema che escala tutto otterrebbe richiamo perfetto. Diversi
+negativi sono deliberatamente vicini a un positivo e se ne distinguono per un
+solo elemento (software a catalogo contro fuori catalogo, uscita volontaria
+contro licenziamento), così da verificare che il sistema distingua la sostanza
+e non il lessico.
+
+Le 70 query fuori dominio non hanno etichette, ed è voluto: la soglia di
+grounding si tara confrontando la distribuzione dei loro punteggi di
+similarità con quella delle richieste coperte dalla knowledge base, senza
+toccare i casi etichettati. Tararla su quelli significherebbe adattare un
+parametro al banco di prova e rendere priva di significato la misura
+successiva.
+
 ## Pipeline di evaluation: `eval_suite/`
 
 Due suite separate, perché misurano cose che si guastano in modo indipendente:

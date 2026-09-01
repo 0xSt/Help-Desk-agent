@@ -107,6 +107,17 @@
     letter-spacing: 0.04em; text-transform: uppercase; color: var(--review);
     margin-bottom: 8px;
   }
+  .review-panel .why {
+    list-style: none; margin: 0 0 8px; padding: 0;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .review-panel .why li {
+    font-size: 13px; line-height: 1.45; color: #6b4d0f;
+    padding-left: 14px; position: relative;
+  }
+  .review-panel .why li::before {
+    content: "›"; position: absolute; left: 0; font-weight: 700;
+  }
   .review-panel .confidence { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
 
   /* --- Contesto recuperato dalle due knowledge base --- */
@@ -295,6 +306,24 @@
     return righe.join('\n\n');
   }
 
+  // Motivazione dell'escalation, in forma sintetica.
+  //
+  // Vengono mostrate le descrizioni dei segnali scattati, non i codici delle
+  // clausole di policy: all'operatore serve sapere COSA ha fatto scattare la
+  // revisione, non quale comma la impone. Il riferimento normativo resta nella
+  // risposta dell'API e nelle tracce, dove serve alla diagnosi e alle misure.
+  function renderMotivo(triggers) {
+    if (!triggers || !triggers.length) return null;
+    const ul = document.createElement('ul');
+    ul.className = 'why';
+    triggers.forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t.description;
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+
   function renderContext(items, titolo, vuoto) {
     const blocco = document.createElement('div');
     blocco.className = 'context-block';
@@ -373,7 +402,7 @@
     const panel = document.createElement('div');
     panel.className = 'review-panel';
     panel.innerHTML = `
-      <div class="label">AI-generated draft — requires your review</div>
+      <div class="label">Escalated for review — why</div>
       <div class="confidence">model confidence: ${data.confidence != null ? data.confidence.toFixed(2) : 'n/a'}</div>
       <textarea id="answerBox">${escapeHtml(data.draft_answer)}</textarea>
       <div class="actions">
@@ -393,6 +422,12 @@
     detail.appendChild(renderContext(
       data.kb_tickets_context, 'Similar past tickets',
       'No similar past ticket was retrieved for this request.'));
+
+    // La motivazione va inserita dopo l'etichetta e prima della confidenza:
+    // è la prima cosa che l'operatore deve leggere, perché inquadra il ticket
+    // ancora prima della bozza.
+    const motivo = renderMotivo(data.escalation_triggers);
+    if (motivo) panel.querySelector('.confidence').before(motivo);
 
     const textarea = panel.querySelector('#answerBox');
     panel.querySelector('#resetBtn').addEventListener('click', () => { textarea.value = data.draft_answer; });
