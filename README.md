@@ -11,7 +11,7 @@ Stack: **FastAPI**  + **LangGraph**
 nessun framework/build step).
 
 
-## Avvio con Docker Compose (modalità consigliata)
+## Avvio con Docker Compose 
 
 ```
 docker compose up --build
