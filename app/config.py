@@ -109,6 +109,12 @@ EMBEDDING_DIM = _env_int("EMBEDDING_DIM", 768)
 # Quanti testi mandare per chiamata in fase di indicizzazione.
 EMBEDDING_BATCH_SIZE = _env_int("EMBEDDING_BATCH_SIZE", 32)
 
+# Tentativi complessivi su un batch di embedding prima di arrendersi, con
+# attesa che raddoppia fra l'uno e l'altro. Le quote del provider sono al
+# minuto, quindi un errore di quota è quasi sempre transitorio: ritentare lo
+# risolve, fallire farebbe perdere tutto il lavoro già svolto.
+EMBEDDING_MAX_RETRIES = _env_int("EMBEDDING_MAX_RETRIES", 5)
+
 # Dimensione dell'embedding di fallback (hashing trick) usato senza API key.
 FALLBACK_EMBEDDING_DIM = 256
 
@@ -174,6 +180,35 @@ def embedding_provider() -> str:
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI")
 MLFLOW_EXPERIMENT = _env_str("MLFLOW_EXPERIMENT", "helpdesk-agent")
 MLFLOW_ENABLED = os.environ.get("MLFLOW_ENABLED", "true").lower() not in ("0", "false", "no")
+
+
+def describe_backend() -> str:
+    """
+    Riporta a quale servizio Google punta il client: API diretta o Vertex AI.
+
+    Sono due prodotti distinti, con **quote separate**, e la differenza si nota
+    solo quando una richiesta viene rifiutata: un errore che cita
+    `aiplatform.googleapis.com` viene da Vertex, uno che cita
+    `generativelanguage.googleapis.com` dall'API diretta. Poiché le quote di
+    embedding predefinite su Vertex sono più strette, sapere quale delle due si
+    sta usando è il primo passo per interpretare un 429.
+
+    La scelta non è esplicita nel nostro codice: la fa l'SDK in base
+    all'ambiente. Basta `GOOGLE_GENAI_USE_VERTEXAI=true`, oppure la presenza di
+    `GOOGLE_CLOUD_PROJECT` insieme alle credenziali applicative, perché il
+    client passi a Vertex senza che nulla lo segnali.
+    """
+    if not GEMINI_API_KEY:
+        return "nessun backend attivo (chiave assente)"
+    try:
+        from google import genai
+
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        url = client._api_client._http_options.base_url
+        nome = "Vertex AI" if client.vertexai else "API Gemini diretta"
+        return f"{nome} ({url})"
+    except Exception as e:
+        return f"backend non determinabile: {type(e).__name__}"
 
 
 def describe_credentials() -> str:

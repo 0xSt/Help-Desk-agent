@@ -331,6 +331,70 @@ AUTO_INDEX=false
 Non disturbano i container: nel compose questi valori sono impostati in
 `environment:`, che ha la precedenza su `env_file:`.
 
+### Avanzamento
+
+Ogni caso concluso emette una riga di log con barra, contatore e tempo
+impiegato:
+
+```
+INFO eval_suite.pipeline: [██████··················]  11/43  25.6% ·  2.4s · escalato    · My laptop was stolen from my car...
+```
+
+La barra che MLflow disegna da sé viene riscritta sulla stessa riga con
+caratteri di controllo: nei log di Docker, che non sono un terminale, risulta
+illeggibile. Questa è una riga per caso, quindi leggibile con
+`docker compose logs -f`.
+
+Serve soprattutto a distinguere due situazioni che dall'esterno appaiono
+identiche: un sistema **lento**, perché sta attendendo fra un tentativo e
+l'altro dopo un errore di quota, e un sistema **bloccato**. Se le righe
+continuano ad apparire, per quanto distanziate, sta procedendo. Il tempo per
+caso lo conferma: valori che crescono da qualche decimo a diversi secondi
+indicano che i ritentativi sono entrati in gioco.
+
+### Quote del provider
+
+Le quote di embedding e generazione sono **al minuto**, e la valutazione le
+satura facilmente: MLflow esegue i casi in parallelo e ognuno comporta due
+chiamate di embedding, una generazione e tre giudizi. Il sintomo è un errore
+`429 RESOURCE_EXHAUSTED`.
+
+Due difese, entrambe attive per impostazione predefinita:
+
+- **la concorrenza è limitata a 2 casi paralleli** (`--workers`), contro i 10
+  del comportamento predefinito di MLflow. La valutazione non è un percorso
+  interattivo: qualche minuto in più non ha costo, mentre una misurazione
+  falsata da errori di quota va rifatta da capo;
+- **le chiamate di embedding vengono ritentate** fino a 5 volte
+  (`EMBEDDING_MAX_RETRIES`) con attesa che raddoppia — 1, 2, 4 secondi. Solo
+  sugli errori transitori: una chiave non valida o un modello inesistente
+  falliscono subito, perché ritentarli ritarderebbe l'errore senza risolverlo.
+
+Se il 429 si ripresenta, le leve nell'ordine: abbassare `--workers` a 1,
+ridurre `--sample`, alzare `EMBEDDING_MAX_RETRIES` nel `.env`.
+
+**Prima però conviene sapere quale servizio si sta usando.** L'API Gemini
+diretta e Vertex AI sono prodotti distinti con quote separate, e le quote di
+embedding predefinite su Vertex sono più strette. La scelta non è esplicita nel
+codice: la fa l'SDK in base all'ambiente, e basta `GOOGLE_GENAI_USE_VERTEXAI`
+oppure `GOOGLE_CLOUD_PROJECT` con le credenziali applicative perché il client
+passi a Vertex senza che nulla lo segnali. All'avvio del backend e della
+valutazione viene quindi riportato:
+
+```
+INFO app.main: Backend Google — API Gemini diretta (https://generativelanguage.googleapis.com/)
+```
+
+Il dominio nel messaggio d'errore conferma la stessa cosa:
+`generativelanguage.googleapis.com` è l'API diretta,
+`aiplatform.googleapis.com` è Vertex.
+
+Perché conta: senza ritentativi il recupero fallisce, `search_kb_docs`
+restituisce una lista vuota per non interrompere il servizio, e la valutazione
+prosegue calcolando metriche **su un contesto inesistente**. Il risultato non
+sarebbe un errore visibile ma un numero privo di significato, che è l'esito
+peggiore per uno strumento di misura.
+
 **Riproducibilità.** Ogni esecuzione registra come parametri del run la
 configurazione attiva, la versione e l'URI del prompt dell'agente nel registry,
 il modello giudice e la composizione del dataset. Senza i parametri che le hanno

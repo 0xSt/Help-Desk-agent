@@ -92,6 +92,7 @@ def _startup() -> None:
     """
     from app import config
     logger.info("Credenziali Gemini — %s", config.describe_credentials())
+    logger.info("Backend Google — %s", config.describe_backend())
     logger.info("Modello: %s | embedding: %s (%d dim, provider %s)",
                 config.GEMINI_MODEL, config.GEMINI_EMBEDDING_MODEL,
                 config.active_embedding_dim(), config.embedding_provider())

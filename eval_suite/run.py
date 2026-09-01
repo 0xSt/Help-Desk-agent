@@ -40,6 +40,7 @@ attribuire una differenza al prompt piuttosto che alle soglie o al modello.
 """
 import argparse
 import logging
+import os
 from typing import Any, Dict, List
 
 import mlflow
@@ -55,10 +56,29 @@ from mlflow.genai.scorers import (
 from app import config, prompts
 from eval_suite import datasets
 from eval_suite.metrics import Esito, aggrega
+from eval_suite import pipeline
 from eval_suite.pipeline import predici
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("eval")
+
+
+def limita_concorrenza(workers: int) -> None:
+    """
+    Limita quanti casi MLflow valuta in parallelo.
+
+    MLflow ne esegue **dieci alla volta** per impostazione predefinita. Ogni
+    caso comporta due chiamate di embedding, una generazione e tre giudizi:
+    dieci in parallelo saturano le quote al minuto del provider, che rispondono
+    con 429 e fanno degradare il recupero a contesto vuoto — producendo metriche
+    calcolate su nulla anziché un errore visibile.
+
+    Il valore predefinito è basso di proposito. La valutazione non è un
+    percorso interattivo: qualche minuto in più non ha costo, mentre una
+    misurazione falsata da errori di quota va rifatta da capo.
+    """
+    os.environ["MLFLOW_GENAI_EVAL_MAX_WORKERS"] = str(workers)
+    logger.info("Concorrenza della valutazione limitata a %d casi paralleli.", workers)
 
 
 def modello_giudice() -> str:
@@ -132,6 +152,7 @@ def _parametri(nome_dataset: str, n_casi: int) -> Dict[str, Any]:
         "eval/dataset": nome_dataset,
         "eval/n_cases": n_casi,
         "eval/judge_model": modello_giudice(),
+        "eval/max_workers": os.environ.get("MLFLOW_GENAI_EVAL_MAX_WORKERS", "10"),
     }
     return params
 
@@ -140,6 +161,7 @@ def suite_escalation() -> Dict[str, float]:
     """Valuta la decisione di escalation sui casi etichettati."""
     casi = datasets.escalation_cases()
     logger.info("Suite escalation: %d casi.", len(casi))
+    pipeline.inizia(len(casi))
 
     with mlflow.start_run(run_name="eval-escalation"):
         mlflow.log_params(_parametri("escalation_cases", len(casi)))
@@ -153,6 +175,7 @@ def suite_quality(sample: int) -> Dict[str, float]:
     """Valuta pertinenza del contesto, fondatezza e aderenza della risposta."""
     casi = datasets.retrieval_cases(sample)
     logger.info("Suite quality: %d casi, giudice %s.", len(casi), modello_giudice())
+    pipeline.inizia(len(casi))
 
     giudice = modello_giudice()
     scorers = [
@@ -173,11 +196,18 @@ def main() -> int:
     """Esegue le suite richieste e stampa le metriche."""
     parser = argparse.ArgumentParser(description="Valutazione del sistema di help desk")
     parser.add_argument("--suite", choices=["escalation", "quality", "all"], default="all")
+    parser.add_argument("--workers", type=int, default=2,
+                        help="casi valutati in parallelo. Valori alti saturano "
+                             "le quote al minuto del provider e producono errori 429")
     parser.add_argument("--sample", type=int, default=20,
                         help="ticket da valutare nella suite quality; ogni caso "
                              "comporta più chiamate al modello giudice")
     args = parser.parse_args()
 
+    limita_concorrenza(args.workers)
+    # Quale servizio Google si sta usando: ha quote diverse, ed è la prima cosa
+    # da sapere per interpretare un eventuale errore 429.
+    logger.info("Backend Google — %s", config.describe_backend())
     mlflow.set_experiment(f"{config.MLFLOW_EXPERIMENT}-eval")
     metriche: Dict[str, float] = {}
 

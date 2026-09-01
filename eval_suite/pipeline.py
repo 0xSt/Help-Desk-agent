@@ -16,6 +16,8 @@ traccia di valutazione: il sistema resta intatto e la strumentazione appartiene
 a chi misura.
 """
 import logging
+import threading
+import time
 import uuid
 from typing import Any, Dict, List
 
@@ -23,6 +25,46 @@ import mlflow
 from mlflow.entities import Document, SpanType
 
 logger = logging.getLogger(__name__)
+
+# Contatore di avanzamento, condiviso fra i thread che MLflow usa per eseguire
+# i casi in parallelo. Serve un lock perché l'incremento e la lettura devono
+# essere atomici: senza, due casi conclusi nello stesso istante stamperebbero
+# lo stesso numero.
+_avanzamento = {"fatti": 0, "totale": 0, "lock": threading.Lock()}
+
+
+def inizia(totale: int) -> None:
+    """Azzera il contatore prima di una suite, fissandone il numero di casi."""
+    with _avanzamento["lock"]:
+        _avanzamento["fatti"] = 0
+        _avanzamento["totale"] = totale
+
+
+def _segnala_avanzamento(query: str, escalato: bool, durata: float) -> None:
+    """
+    Emette una riga di avanzamento a ogni caso concluso.
+
+    La barra che MLflow disegna da sé viene riscritta sulla stessa riga con
+    caratteri di controllo: nei log di Docker, che non sono un terminale,
+    risulta illeggibile o del tutto assente. Qui si emette invece una riga per
+    caso, con il tempo impiegato.
+
+    Serve soprattutto a distinguere due situazioni che dall'esterno appaiono
+    identiche: un sistema lento — perché sta attendendo fra un tentativo e
+    l'altro dopo un errore di quota — e un sistema bloccato. Se le righe
+    continuano ad apparire, per quanto distanziate, sta procedendo.
+    """
+    with _avanzamento["lock"]:
+        _avanzamento["fatti"] += 1
+        fatti, totale = _avanzamento["fatti"], _avanzamento["totale"]
+
+    quota = fatti / totale if totale else 0.0
+    riempiti = int(quota * 24)
+    barra = "█" * riempiti + "·" * (24 - riempiti)
+    logger.info("[%s] %3d/%-3d %5.1f%% · %5.1fs · %s · %s",
+                barra, fatti, totale, quota * 100, durata,
+                "escalato   " if escalato else "risolto     ",
+                query.replace("\n", " ")[:48])
 
 
 @mlflow.trace(name="retrieved_context", span_type=SpanType.RETRIEVER)
@@ -96,6 +138,7 @@ def predici(query: str, ticket_id: str = "") -> Dict[str, Any]:
     """
     from app.graph import graph
 
+    avvio = time.time()
     stato = {"user_query": query, "exclude_sources": [ticket_id] if ticket_id else []}
     out = graph.invoke(stato, {"configurable": {"thread_id": f"eval-{uuid.uuid4()}"}})
 
@@ -118,6 +161,7 @@ def predici(query: str, ticket_id: str = "") -> Dict[str, Any]:
         }
 
     _registra_contesto(_documenti(esito))
+    _segnala_avanzamento(query, esito["escalated"], time.time() - avvio)
 
     # Gli scorer che valutano la risposta ricevono `outputs`: si restituisce la
     # sola risposta come stringa sotto una chiave esplicita, insieme ai campi

@@ -131,14 +131,41 @@ def _l2_normalize(vec: List[float]) -> List[float]:
     return [v / norm for v in vec]
 
 
+def _e_transitorio(errore: Exception) -> bool:
+    """
+    Riconosce gli errori che ha senso ritentare.
+
+    Sono quelli in cui la richiesta è corretta ma il servizio non può servirla
+    ora: quota al minuto esaurita (429 / RESOURCE_EXHAUSTED), servizio
+    temporaneamente non disponibile (503), scadenza del tempo di attesa.
+    Distinguerli conta: ritentare una chiave non valida o un modello
+    inesistente non porterebbe a nulla se non a ritardare l'errore.
+    """
+    t = str(errore).lower()
+    return any(k in t for k in ("429", "resource_exhausted", "rate limit",
+                                "503", "unavailable", "deadline", "timeout"))
+
+
 def _gemini_embed(texts: List[str], task_type: str) -> List[List[float]]:
     """
-    Embedding via API Gemini, a batch.
+    Embedding via API Gemini, a batch, con ritentativi sugli errori transitori.
 
     `task_type` distingue i due lati della ricerca (RETRIEVAL_DOCUMENT in
     indicizzazione, RETRIEVAL_QUERY in interrogazione): è il parametro che
     dice al modello quale delle due rappresentazioni produrre.
+
+    I ritentativi servono perché le quote di embedding sono **al minuto**: una
+    valutazione che esegue più casi in parallelo, o un'indicizzazione di
+    qualche centinaio di chunk, le supera con facilità pur restando entro il
+    limite giornaliero. Attendere e riprovare risolve, mentre fallire
+    significherebbe perdere il lavoro già svolto.
+
+    L'attesa raddoppia a ogni tentativo (1, 2, 4... secondi): l'esaurimento
+    della quota è una condizione condivisa fra le richieste concorrenti, e
+    ritentare subito tutte insieme la riprodurrebbe invece di risolverla.
     """
+    import time
+
     from google import genai
     from google.genai import types
 
@@ -147,15 +174,27 @@ def _gemini_embed(texts: List[str], task_type: str) -> List[List[float]]:
 
     for start in range(0, len(texts), config.EMBEDDING_BATCH_SIZE):
         batch = texts[start:start + config.EMBEDDING_BATCH_SIZE]
-        response = client.models.embed_content(
-            model=config.GEMINI_EMBEDDING_MODEL,
-            contents=batch,
-            config=types.EmbedContentConfig(
-                task_type=task_type,
-                output_dimensionality=config.EMBEDDING_DIM,
-            ),
-        )
-        out.extend(_l2_normalize(list(e.values)) for e in response.embeddings)
+        for tentativo in range(config.EMBEDDING_MAX_RETRIES):
+            try:
+                response = client.models.embed_content(
+                    model=config.GEMINI_EMBEDDING_MODEL,
+                    contents=batch,
+                    config=types.EmbedContentConfig(
+                        task_type=task_type,
+                        output_dimensionality=config.EMBEDDING_DIM,
+                    ),
+                )
+                out.extend(_l2_normalize(list(e.values)) for e in response.embeddings)
+                break
+            except Exception as e:
+                ultimo = tentativo == config.EMBEDDING_MAX_RETRIES - 1
+                if ultimo or not _e_transitorio(e):
+                    raise
+                attesa = 2 ** tentativo
+                logger.warning("Embedding non riuscito (%s). Nuovo tentativo fra %ds "
+                               "[%d/%d].", type(e).__name__, attesa,
+                               tentativo + 1, config.EMBEDDING_MAX_RETRIES)
+                time.sleep(attesa)
 
     return out
 
