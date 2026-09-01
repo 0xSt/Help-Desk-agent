@@ -1,0 +1,105 @@
+{
+  "_README": {
+    "scopo": "Ground truth di rilevanza per la collection kb_docs. Per una query che appartiene a una data sottocategoria, quali policy DEVONO comparire tra i risultati del retrieval perché lo si consideri corretto.",
+    "come_si_usa": "La rilevanza è a livello di documento (POL-00x), non di singola sezione: chiedere al retrieval di indovinare la sezione esatta sarebbe troppo severo, e ai fini della risposta basta che il modello riceva la policy giusta. Le metriche primarie sono hit_rate@k e MRR.",
+    "criterio": "'expected' contiene le policy senza le quali una risposta corretta non è formulabile. 'acceptable' contiene policy pertinenti ma non indispensabili: non contano come errore se compaiono, ma la loro assenza non penalizza.",
+    "nota_su_POL-006": "POL-006 è la policy master sulle priorità e sull'escalation ed è pertinente a quasi tutto. Inserirla ovunque tra le 'expected' renderebbe la metrica poco informativa (basterebbe recuperare sempre POL-006 per fare bene), quindi compare solo dove è realmente decisiva, cioè nei casi di escalation obbligatoria.",
+    "da_rivedere": "Mappa derivata dal testo delle policy. Va riletta e corretta a mano: è ground truth, e un errore qui si propaga a tutte le metriche di retrieval."
+  },
+
+  "by_subcategory": {
+    "Password Reset": {
+      "expected": ["POL-001"],
+      "acceptable": ["POL-005"]
+    },
+    "Account Lockout / MFA": {
+      "expected": ["POL-001"],
+      "acceptable": ["POL-005"]
+    },
+    "New Account Provisioning / Access Request": {
+      "expected": ["POL-002"],
+      "acceptable": ["POL-006", "POL-008"]
+    },
+    "Offboarding": {
+      "expected": ["POL-002"],
+      "acceptable": ["POL-006", "POL-001"]
+    },
+
+    "Laptop/Desktop Malfunction": {
+      "expected": ["POL-003"],
+      "acceptable": ["POL-008"]
+    },
+    "Peripheral Issues": {
+      "expected": ["POL-003"],
+      "acceptable": []
+    },
+    "Printer": {
+      "expected": ["POL-003"],
+      "acceptable": []
+    },
+    "Hardware Replacement Request": {
+      "expected": ["POL-003"],
+      "acceptable": ["POL-006"]
+    },
+
+    "Software Installation Request": {
+      "expected": ["POL-004"],
+      "acceptable": ["POL-006", "POL-008"]
+    },
+    "Software License Request": {
+      "expected": ["POL-004"],
+      "acceptable": ["POL-006"]
+    },
+    "Application Crash/Error": {
+      "expected": ["POL-004"],
+      "acceptable": []
+    },
+
+    "Wi-Fi Connectivity": {
+      "expected": ["POL-007"],
+      "acceptable": []
+    },
+    "VPN Connection Issues": {
+      "expected": ["POL-007"],
+      "acceptable": ["POL-006", "POL-005"]
+    },
+    "Slow Network / Drive Access": {
+      "expected": ["POL-007"],
+      "acceptable": ["POL-002"]
+    },
+
+    "Phishing Report": {
+      "expected": ["POL-005"],
+      "acceptable": ["POL-006", "POL-001"]
+    },
+    "Suspected Malware": {
+      "expected": ["POL-005"],
+      "acceptable": ["POL-006", "POL-003"]
+    },
+    "Lost/Stolen Device": {
+      "expected": ["POL-005"],
+      "acceptable": ["POL-006", "POL-003"]
+    },
+
+    "Outlook Issues": {
+      "expected": ["POL-004"],
+      "acceptable": ["POL-008"]
+    },
+    "Distribution List / Calendar": {
+      "expected": ["POL-002"],
+      "acceptable": ["POL-004"]
+    },
+
+    "SharePoint/OneDrive/Teams": {
+      "expected": ["POL-002"],
+      "acceptable": ["POL-008", "POL-007"]
+    }
+  },
+
+  "_note_per_sottocategoria": {
+    "Outlook Issues": "Nessuna policy copre esplicitamente i client di posta. POL-004 §5 (errori e crash delle applicazioni) è la copertura più vicina, ma è una forzatura: se le metriche risultano basse proprio qui, è un buco della knowledge base, non un difetto del retrieval.",
+    "Distribution List / Calendar": "Creare una lista di distribuzione o dare accesso a un calendario condiviso è di fatto una concessione di accesso a una risorsa, quindi POL-002 §3 (richieste di accesso standard).",
+    "SharePoint/OneDrive/Teams": "Quasi sempre un problema di permessi su risorsa condivisa, quindi POL-002. POL-008 diventa pertinente quando c'è condivisione verso l'esterno.",
+    "Slow Network / Drive Access": "POL-007 §5 tratta esplicitamente sia la lentezza sia l'accesso negato ai drive, distinguendo i due sintomi. POL-002 è accettabile perché la causa è spesso una modifica di permessi."
+  }
+}

@@ -26,7 +26,10 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 KB = Path(__file__).resolve().parent.parent / "app" / "knowledge_base"
-DATI = Path(__file__).resolve().parent.parent / "evaluation" / "datasets"
+# I dataset vivono accanto al codice che li usa. La cartella si chiama `data`
+# e non `datasets` perché in questo package esiste già il modulo
+# `datasets.py`: una directory omonima renderebbe ambiguo l'import.
+DATI = Path(__file__).resolve().parent / "data"
 
 
 def escalation_cases() -> List[Dict[str, Any]]:

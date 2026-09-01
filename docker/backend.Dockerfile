@@ -44,7 +44,6 @@ COPY --chown=appuser:appuser app/ ./app/
 # L'evaluation non serve a runtime, ma includerla permette di lanciarla nei
 # container con `docker compose run`, evitando di dover replicare l'ambiente
 # Python sull'host. Sono solo file di testo e JSON: peso trascurabile.
-COPY --chown=appuser:appuser evaluation/ ./evaluation/
 COPY --chown=appuser:appuser eval_suite/ ./eval_suite/
 
 USER appuser

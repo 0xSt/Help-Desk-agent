@@ -113,6 +113,119 @@ Le due knowledge base vivono in `app/knowledge_base/`:
   somiglierà), mentre risoluzione/categoria/priorità/esito di escalation
   finiscono nel payload da mostrare come contesto una volta recuperato il punto.
 
+## Pipeline di evaluation: `eval_suite/`
+
+Due suite separate, perché misurano cose che si guastano in modo indipendente:
+una media unica nasconderebbe quale delle due non funziona.
+
+```bash
+python -m eval_suite.run --suite escalation      # decisione
+python -m eval_suite.run --suite quality --sample 20   # contesto e risposta
+python -m eval_suite.run --suite all --sample 20
+```
+
+**`escalation`** — la decisione di coinvolgere un operatore è corretta? Valutata
+sui 43 casi etichettati in `eval_suite/data/escalation_cases.json` con regole
+deterministiche, **senza giudice**: l'esito atteso è annotato, quindi
+introdurre un modello per stabilirlo aggiungerebbe solo rumore e costo.
+
+Classe positiva: «va escalato». La metrica primaria è il **richiamo**, non
+l'accuratezza: con circa un quarto di positivi, un sistema che non escala mai
+raggiungerebbe il 76% pur essendo inutile. La gerarchia riflette l'asimmetria
+dei costi — un falso negativo è un incidente di sicurezza mai rivisto, un falso
+positivo qualche minuto di un operatore.
+
+| Metrica | Ruolo |
+|---|---|
+| `recall` | primaria: quota di ticket da escalare effettivamente colti |
+| `precision` | costo operativo: quante escalation erano superflue |
+| `f2` | sintesi, pesa il richiamo quattro volte la precisione |
+| `mcc` | controprova robusta allo sbilanciamento delle classi |
+| `clausola/<POL>/recall` | richiamo per singola clausola: individua *quale* regola non scatta |
+| `famiglia/<tipo>/recall` | separa i segnali che dipendono dal prompt da quelli che dipendono dalle soglie |
+
+**`quality`** — il contesto recuperato è pertinente e la risposta vi si attiene?
+Valutata sui ticket storici in leave-one-out, con tre **scorer nativi di
+MLflow**, che sono giudizi di un modello perché nessuna di queste proprietà si
+calcola con una formula chiusa.
+
+| Scorer | Cosa misura |
+|---|---|
+| `RetrievalRelevance` | i documenti recuperati sono pertinenti alla richiesta |
+| `RetrievalGroundedness` | la risposta è sostenuta dal contesto recuperato |
+| `RelevanceToQuery` | la risposta affronta la domanda posta |
+
+I primi due si leggono insieme: fondatezza bassa con pertinenza alta indica che
+il modello inventa pur avendo il materiale giusto; entrambe basse indicano che
+il problema è a monte, nel recupero.
+
+**Due vincoli tecnici.** Gli scorer di recupero leggono la traccia, non gli
+argomenti della funzione: cercano uno span di tipo `RETRIEVER`. Il grafo non ne
+produce, quindi `eval_suite/pipeline.py` ne registra uno dentro la sola traccia
+di valutazione, lasciando intatto il codice di produzione. Il modello giudice va
+inoltre indicato esplicitamente come `gemini:/<modello>`, che MLflow instrada
+tramite LiteLLM: in assenza di indicazioni userebbe un modello OpenAI.
+
+### Esecuzione nei container
+
+La suite gira dentro l'immagine del backend, che la contiene già e che ha
+`MLFLOW_TRACKING_URI=http://mlflow:5000`: i risultati finiscono quindi
+nell'istanza MLflow del compose e nei suoi volumi, non in uno store locale
+effimero.
+
+```bash
+# 1. servizi necessari: Qdrant per il retrieval, MLflow per i risultati
+docker compose up -d qdrant mlflow ingestion
+
+# 2. valutazione
+docker compose run --rm backend python -m eval_suite.run --suite escalation
+docker compose run --rm backend python -m eval_suite.run --suite quality --sample 20
+docker compose run --rm backend python -m eval_suite.run --suite all --sample 20
+
+# 3. risultati
+#    http://localhost:5000 -> esperimento "helpdesk-agent-eval"
+```
+
+Tre dettagli che rendono corretta questa procedura:
+
+- **`--rm`** elimina il container al termine. Il contenitore è usa-e-getta:
+  ciò che deve sopravvivere sono i risultati, che stanno nei volumi di MLflow.
+- **niente `--no-deps`**: la valutazione esegue il sistema vero, quindi ha
+  bisogno di Qdrant popolato e di MLflow raggiungibile. Il servizio
+  `ingestion` va lasciato completare prima, altrimenti le collection sono
+  vuote e ogni ticket verrebbe escalato per mancanza di appigli.
+- **la chiave API** arriva dal file `.env` tramite `env_file`, come per gli
+  altri servizi: la suite `quality` ne ha bisogno perché le sue tre metriche
+  sono giudizi di un modello.
+
+I risultati persistono nei volumi `mlflow_db` (esperimenti, run, metriche,
+tracce) e `mlflow_artifacts`. Sopravvivono a `docker compose down`; si perdono
+solo con `docker compose down -v`, che cancella i volumi.
+
+Per eseguirla dall'host anziché nei container servono tre variabili nel `.env`,
+che puntano ai servizi esposti sulle porte locali:
+
+```
+QDRANT_URL=http://localhost:6333
+MLFLOW_TRACKING_URI=http://localhost:5000
+AUTO_INDEX=false
+```
+
+Non disturbano i container: nel compose questi valori sono impostati in
+`environment:`, che ha la precedenza su `env_file:`.
+
+**Riproducibilità.** Ogni esecuzione registra come parametri del run la
+configurazione attiva, la versione e l'URI del prompt dell'agente nel registry,
+il modello giudice e la composizione del dataset. Senza i parametri che le hanno
+prodotte, due serie di metriche non sono confrontabili e una differenza non è
+attribuibile al prompt piuttosto che alle soglie.
+
+```
+prompt/agent_version  1        eval/judge_model  gemini:/gemini-3.1-flash-lite
+prompt/agent_uri      prompts:/helpdesk-agent-system/1
+eval/dataset          escalation_cases          eval/n_cases  43
+```
+
 ## Riferimento API
 
 | Endpoint | Metodo | Corpo | Usato da |

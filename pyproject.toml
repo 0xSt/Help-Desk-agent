@@ -16,27 +16,25 @@ dependencies = [
     "qdrant-client>=1.9",
     "google-genai>=1.0",
     "mlflow>=3.0",
+    # Necessaria agli scorer di eval_suite. Come giudice MLflow supporta
+    # nativamente pochi provider (OpenAI, Anthropic, Bedrock, Mistral) e
+    # instrada tutti gli altri, Gemini compreso, tramite LiteLLM: senza questa
+    # dipendenza `gemini:/<modello>` non è utilizzabile e MLflow ricadrebbe sul
+    # provider predefinito, che è OpenAI. Sta fra le dipendenze principali e
+    # non in un extra perché l'immagine del backend installa solo queste, ed è
+    # da quell'immagine che si esegue la valutazione nei container.
+    "litellm>=1.0",
 ]
 
 [project.optional-dependencies]
-# Usate solo dall'analisi esplorativa (analysis/eda.py), non dal servizio:
-# tenerle fuori dalle dipendenze principali evita di appesantire l'immagine
-# del backend con matplotlib e il suo stack.
-analysis = [
-    "matplotlib>=3.8",
-]
-
-# Valutazione RAG con metriche standardizzate (evaluation/ragas_suite.py).
-# Tenuto fuori dalle dipendenze principali per un motivo preciso: RAGAS
-# importa ancora un modulo rimosso da langchain-community 0.4, quindi impone
-# `langchain-community<0.4`. Vincolare l'ambiente del servizio a quella
-# versione per una libreria usata solo in valutazione sarebbe un accoppiamento
-# ingiustificato: installala in un ambiente separato con
-#     uv sync --extra ragas
+# Non utilizzato dal servizio né dalla suite di valutazione: resta disponibile
+# per chi volesse confrontare le metriche native di MLflow con quelle di RAGAS.
+# Impone `langchain-community<0.4`, perché RAGAS importa ancora un modulo
+# rimosso dalle versioni successive: va quindi installato in un ambiente
+# separato, con `uv sync --extra ragas`.
 ragas = [
     "ragas>=0.4",
     "langchain-community<0.4",
-    "litellm>=1.0",
     "pandas>=2.0",
 ]
 

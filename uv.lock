@@ -1196,6 +1196,7 @@ dependencies = [
     { name = "google-genai" },
     { name = "langchain" },
     { name = "langgraph" },
+    { name = "litellm" },
     { name = "mlflow" },
     { name = "pydantic" },
     { name = "qdrant-client" },
@@ -1203,12 +1204,8 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-analysis = [
-    { name = "matplotlib" },
-]
 ragas = [
     { name = "langchain-community" },
-    { name = "litellm" },
     { name = "pandas" },
     { name = "ragas" },
 ]
@@ -1220,8 +1217,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=1.0" },
     { name = "langchain-community", marker = "extra == 'ragas'", specifier = "<0.4" },
     { name = "langgraph", specifier = ">=1.0" },
-    { name = "litellm", marker = "extra == 'ragas'", specifier = ">=1.0" },
-    { name = "matplotlib", marker = "extra == 'analysis'", specifier = ">=3.8" },
+    { name = "litellm", specifier = ">=1.0" },
     { name = "mlflow", specifier = ">=3.0" },
     { name = "pandas", marker = "extra == 'ragas'", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -1229,7 +1225,7 @@ requires-dist = [
     { name = "ragas", marker = "extra == 'ragas'", specifier = ">=0.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },
 ]
-provides-extras = ["analysis", "ragas"]
+provides-extras = ["ragas"]
 
 [[package]]
 name = "hf-xet"
