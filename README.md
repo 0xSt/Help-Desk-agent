@@ -237,6 +237,7 @@ una media unica nasconderebbe quale delle due non funziona.
 
 ### Parametri tracciati (valori di default)
 | Parametro | Valore |
+|---|---|
 | prompt/agent_version |    1 |
 | prompt/agent_uri |        prompts:/helpdesk-agent-system/1 |
 | eval/judge_model |        gemini:/gemini-3.1-flash-lite |
