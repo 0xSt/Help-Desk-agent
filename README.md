@@ -43,8 +43,8 @@ Il backend non parte finché l'ingestion non è uscita con successo
 richieste troverebbero collection vuote e ogni ticket verrebbe escalato per
 "retrieval senza appigli".
 
-Funziona subito senza chiave API, in modalità mock. Prova questo scenario
-end-to-end:
+Funziona subito senza chiave API, in modalità mock. 
+Scenario per provare in mock:
 1. Da `/`, scrivi "I clicked a phishing link and entered my password" → il
    ticket va in escalation, l'utente vede un messaggio di attesa.
 2. Apri `/agent`: il ticket è in coda, con l'elenco dei trigger che l'hanno
