@@ -113,7 +113,7 @@ EMBEDDING_BATCH_SIZE = _env_int("EMBEDDING_BATCH_SIZE", 32)
 # attesa che raddoppia fra l'uno e l'altro. Le quote del provider sono al
 # minuto, quindi un errore di quota è quasi sempre transitorio: ritentare lo
 # risolve, fallire farebbe perdere tutto il lavoro già svolto.
-EMBEDDING_MAX_RETRIES = _env_int("EMBEDDING_MAX_RETRIES", 5)
+EMBEDDING_MAX_RETRIES = _env_int("EMBEDDING_MAX_RETRIES", 8)
 
 # Dimensione dell'embedding di fallback (hashing trick) usato senza API key.
 FALLBACK_EMBEDDING_DIM = 256

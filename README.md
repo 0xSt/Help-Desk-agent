@@ -235,6 +235,14 @@ successiva.
 Due suite separate, perché misurano cose che si guastano in modo indipendente:
 una media unica nasconderebbe quale delle due non funziona.
 
+### Parametri tracciati (valori di default)
+prompt/agent_version    1
+prompt/agent_uri        prompts:/helpdesk-agent-system/1
+eval/judge_model        gemini:/gemini-3.1-flash-lite
+eval/dataset            escalation_cases
+llm_model               gemini-3.1-flash-lite
+confidence_threshold    0.65
+
 ```bash
 python -m eval_suite.run --suite escalation      # decisione
 python -m eval_suite.run --suite quality --sample 20   # contesto e risposta
