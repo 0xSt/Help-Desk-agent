@@ -66,13 +66,8 @@ versioni diverse da quelle testate.
 
 Sia la generazione sia l'embedding passano da Gemini (SDK `google-genai`).
 
-- **Generazione** — `gemini-3.1-flash` (configurabile). Usa lo **structured
-  output nativo**: si passa uno schema Pydantic in `response_schema` e la
-  risposta è garantita conforme, invece di chiedere "rispondi solo JSON" e
-  sperare che il parsing regga. I parametri di sampling (`temperature`,
-  `top_p`, `top_k`) non vengono impostati: sono deprecati sui modelli 3.x.
-- **Embedding** — `gemini-embedding-001` con **task type asimmetrici**:
-  `RETRIEVAL_DOCUMENT` in indicizzazione, `RETRIEVAL_QUERY` in query.
+- **Generazione** — `gemini-3.1-flash` (configurabile).
+- **Embedding** — `gemini-embedding-001`.
 
 **Senza `GEMINI_API_KEY`** il sistema resta interamente eseguibile: risposte
 mock ed embedding hash-based deterministico. 
