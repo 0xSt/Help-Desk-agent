@@ -17,7 +17,7 @@ WORKDIR /mlflow
 
 # Il server ha bisogno di mlflow e del driver per il backend store.
 # psycopg/altri driver non servono: qui il backend store è SQLite su volume.
-RUN uv pip install --system --no-cache "mlflow>=3.0"
+RUN uv pip install --system --no-cache "mlflow>=3.0" "anyio<4.15"
 
 RUN useradd --create-home --uid 1000 mlflowuser \
     && mkdir -p /mlflow/artifacts /mlflow/db \
