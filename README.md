@@ -83,9 +83,7 @@ esattamente i punti i cui input/output servono all'evaluation.
 
 **MLflow è pensato come servizio a sé**: l'URI arriva da
 `MLFLOW_TRACKING_URI` e in Docker Compose punterà al container dedicato. Se la
-variabile non è impostata, MLflow scrive in locale su `./mlruns`. Il tracing
-**non può far cadere una richiesta**: se il server è irraggiungibile, il
-sistema continua a rispondere senza tracciare.
+variabile non è impostata, MLflow scrive in locale su `./mlruns`.
 
 > L'integrazione di MLFlow non copre ancora nativamente gli interrupt di
 > LangGraph.
@@ -168,7 +166,6 @@ Non vengono mai indicizzati: servono a **misurare** metriche.
 | File | Contenuto | Usato da |
 |---|---|---|
 | `escalation_cases.json` | 43 casi scritti a mano con esito atteso e clausole attese: 23 da escalare, 20 da risolvere | suite `escalation` |
-| `out_of_domain_queries.json` | 70 richieste plausibili ma su argomenti che nessuna policy copre | calibrazione della soglia di grounding |
 | `policy_relevance.json` | mappa delle 20 sottocategorie verso le policy attese e quelle accettabili | misure di pertinenza del recupero |
 
 #### Modello dati di un caso di valutazione
@@ -188,8 +185,6 @@ decisione è corretta ma *per quale motivo*, distinguendo una decisione giusta
 presa per la ragione sbagliata. `trigger_family` separa i segnali che
 dipendono dal prompt da quelli che dipendono dalle soglie.
 
-Gli altri due file hanno struttura minima: `out_of_domain_queries.json` è un
-oggetto con la chiave `queries` (`list[str]`) e note descrittive;
 `policy_relevance.json` mappa ogni sottocategoria a
 `{"expected": list[str], "acceptable": list[str]}`, dove le policy
 `acceptable` sono pertinenti ma non indispensabili e non vengono conteggiate
@@ -288,9 +283,6 @@ tracce) e `mlflow_artifacts`.
 - quello del giudice all'avvio di una valutazione — una sua modifica sposta i
   punteggi senza che il sistema valutato sia cambiato, quindi va tracciata
   anch'essa;
-- una **nuova versione nasce solo se il testo è effettivamente cambiato**:
-  senza questo confronto ogni riavvio ne creerebbe una identica alla
-  precedente, rendendo illeggibile la cronologia proprio quando serve;
 - l'alias `production` punta sempre alla versione attiva;
 - la versione finisce fra i parametri di ogni run, di avvio e di valutazione.
 
